@@ -6,7 +6,7 @@
     {
       "id": "azman-panel",
       "name": "Azman Panel",
-      "version": "2026.08.07-2151",
+      "version": "2026.08.08-0125",
       "category": "system",
       "description": "Panel instalacyjny i narzędziowy ekosystemu Azman.",
       "python": ["3.13"],
@@ -14,9 +14,9 @@
       "package": "enigma2-plugin-extensions--azman-azmanpanel",
       "variants": {
         "all": {
-          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.08.07-2151_all.ipk",
-          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.08.07-2151/enigma2-plugin-extensions--azman-azmanpanel_2026.08.07-2151_all.ipk",
-          "sha256": "cdc7890ea14e72a411fee9154364bcd6ead7c8e3d2de2e892686ff1e4974360e"
+          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.08.08-0125_all.ipk",
+          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.08.08-0125/enigma2-plugin-extensions--azman-azmanpanel_2026.08.08-0125_all.ipk",
+          "sha256": "df1c6f3f9b8762f5a0d49f616358634b5e83df43ca91e653c80038433d46e7fd"
         }
       },
       "protected": false
