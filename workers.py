@@ -10,6 +10,8 @@ import re
 import os
 import tempfile
 import zipfile
+import json
+import hashlib
 from enigma import eTimer, eDVBDB
 from . import constants, utils, runtime
 
@@ -121,6 +123,57 @@ class PackageListWorker(BaseWorker):
             self.error_message = "Nie można pobrać listy pakietów. Sprawdź połączenie z internetem."
         finally:
             self._safe_call_main_thread(self.error_message, self.packages)
+
+class ManifestPackageDownloadWorker(BaseWorker):
+    """Pobiera pakiet z manifestu i weryfikuje jego SHA-256 przed instalacją."""
+    MAX_PACKAGE_SIZE = 100 * 1024 * 1024
+
+    def __init__(self, package_id, callback_finished):
+        super(ManifestPackageDownloadWorker, self).__init__(callback_finished)
+        self.package_id = package_id
+        self.error_message = None
+        self.package_path = None
+
+    def run(self):
+        try:
+            with urllib.request.urlopen(constants.AZMAN_MANIFEST_URL, timeout=20) as response:
+                manifest = json.loads(response.read().decode("utf-8"))
+            entry = next((item for item in manifest.get("packages", [])
+                          if item.get("id") == self.package_id), None)
+            if not entry:
+                raise ValueError("Pakiet nie występuje w manifeście.")
+            tags = runtime.package_runtime_tags()
+            variant = None
+            for tag in tags:
+                variant = (entry.get("variants") or {}).get(tag)
+                if variant:
+                    break
+            if not variant or not variant.get("url") or not variant.get("sha256"):
+                raise ValueError("Brak zgodnego wariantu lub sumy SHA-256.")
+            target = os.path.join(tempfile.gettempdir(), os.path.basename(variant["url"]))
+            digest = hashlib.sha256()
+            size = 0
+            with urllib.request.urlopen(variant["url"], timeout=60) as response, open(target, "wb") as handle:
+                while True:
+                    chunk = response.read(64 * 1024)
+                    if not chunk:
+                        break
+                    size += len(chunk)
+                    if size > self.MAX_PACKAGE_SIZE:
+                        raise ValueError("Pakiet przekracza limit rozmiaru.")
+                    handle.write(chunk)
+                    digest.update(chunk)
+            if digest.hexdigest().lower() != variant["sha256"].lower():
+                try:
+                    os.unlink(target)
+                except OSError:
+                    pass
+                raise ValueError("Nieprawidłowa suma SHA-256 pobranego pakietu.")
+            self.package_path = target
+        except Exception as error:
+            self.error_message = str(error)
+        finally:
+            self._safe_call_main_thread(self.error_message, self.package_path)
 
 class PiconZipListWorker(BaseWorker):
     # ... (bez zmian) ...

@@ -15,7 +15,7 @@ from skin import loadSkin
 from enigma import eTimer, eConsoleAppContainer
 
 from . import constants, utils
-from .workers import PiconZipListWorker, PiconInstallationWorker, SourcesXmlDownloadWorker, IptvBouquetListWorker, IptvBouquetInstallWorker, IptvBouquetUninstallWorker, IptvOrgWorker, PackageListWorker
+from .workers import PiconZipListWorker, PiconInstallationWorker, SourcesXmlDownloadWorker, IptvBouquetListWorker, IptvBouquetInstallWorker, IptvBouquetUninstallWorker, IptvOrgWorker, PackageListWorker, ManifestPackageDownloadWorker
 from .config import config, save_config
 
 PLUGIN_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -353,7 +353,7 @@ class AzmanPanelMainScreen(Screen):
             ("Picons", self.open_picon_manager, "icon_picons.png", "Pobierz picony 220x132 transparent."),
             ("Karcher Radio Control", lambda: self._start_feed_package_install("Karcher Radio Control", "enigma2-plugin-extensions--azman-karcherradio"), "icon_karcherradiocontrol.png", "Zainstaluj plugin Karcher Radio Control."),
             ("YT Playlist Player", self.show_work_in_progress, "icon_ytplaylistplayer.png", "Odtwarzacz playlist YouTube."),
-            ("Monitoring Burz", self.show_work_in_progress, "icon_monitoringburz.png", "Monitoring wyładowań atmosferycznych."),
+            ("Monitoring Burz", self.start_monitoringburz_install, "icon_monitoringburz.png", "Monitoring wyładowań atmosferycznych."),
             ("Kalendarz Ogrodnika", self.show_work_in_progress, "icon_kalendarzogrod.png", "Kalendarz i narzędzia ogrodnika."),
             # --- RZĄD 3 (Miejsca 13-18) ---
             ("IMGW Meteo", lambda: self._start_feed_package_install("IMGW Meteo", "enigma2-plugin-extensions--azman-imgwmeteo"), "icon_imgwmeteo.png", "Zainstaluj plugin pogody IMGW Meteo."),
@@ -712,6 +712,34 @@ class AzmanPanelMainScreen(Screen):
         msg_type = MessageBox.TYPE_ERROR if error_message else MessageBox.TYPE_INFO
         self.session.open(MessageBox, message, type=msg_type)
         
+    def start_monitoringburz_install(self):
+        message = ("Monitoring Burz jest pobierany z chronionego feeda.\n\n"
+                   "Pobrany pakiet zostanie sprawdzony przez SHA-256 przed instalacją.\n\n"
+                   "Czy chcesz kontynuować?")
+        self.session.openWithCallback(
+            self._confirm_monitoringburz_install,
+            MessageBox, message, MessageBox.TYPE_YESNO, default=True
+        )
+
+    def _confirm_monitoringburz_install(self, confirmed):
+        if not confirmed:
+            return
+        self.current_worker = ManifestPackageDownloadWorker(
+            "monitoringburz", self._on_manifest_package_ready
+        )
+        self.session.open(MessageBox, "Pobieranie i weryfikacja pakietu...", type=MessageBox.TYPE_INFO)
+        self.current_worker.start()
+
+    def _on_manifest_package_ready(self, error_message, package_path):
+        self.current_worker = None
+        if error_message:
+            self.session.open(MessageBox, "Nie udało się przygotować instalacji:\n%s" % error_message, type=MessageBox.TYPE_ERROR)
+            return
+        self._handle_install_with_restart(
+            "Instalowanie Monitoring Burz",
+            "opkg install %s" % package_path
+        )
+
     def _handle_install_with_restart(self, title, command):
         self.session.open(
             OpkgCommandScreen, 
