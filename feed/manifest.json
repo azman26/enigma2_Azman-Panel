@@ -9,7 +9,7 @@
       "version": "2026.08.08-0125",
       "category": "system",
       "description": "Panel instalacyjny i narzędziowy ekosystemu Azman.",
-      "python": ["3.13"],
+      "python": ["3.12", "3.13", "3.14"],
       "architecture": ["all"],
       "package": "enigma2-plugin-extensions--azman-azmanpanel",
       "variants": {
@@ -27,7 +27,7 @@
       "version": "2026.08.07-2151",
       "category": "Pluginy",
       "description": "Monitoring wyładowań atmosferycznych.",
-      "python": ["3.12", "3.13", "3.14"],
+      "python": ["3.13"],
       "architecture": ["all"],
       "package": "enigma2-plugin-extensions--azman-monitoringburz-py313",
       "variants": {
