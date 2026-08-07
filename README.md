@@ -101,6 +101,4 @@ Azman Panel będzie rozwijany jako centralny panel ekosystemu Azman. W przyszło
 
 - prywatny feed pluginów,
 - automatyczny wybór IPK według wersji Pythona,
-- obsługa autoryzacji użytkowników,
-- tokeny przypisane do dekoderów,
 - chronione listy kanałów i picony.
