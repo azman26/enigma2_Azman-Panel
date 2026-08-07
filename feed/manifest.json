@@ -9,7 +9,7 @@
       "version": "2026.08.07-2151",
       "category": "system",
       "description": "Panel instalacyjny i narzędziowy ekosystemu Azman.",
-      "python": ["3.12", "3.13", "3.14"],
+      "python": ["3.13"],
       "architecture": ["all"],
       "package": "enigma2-plugin-extensions--azman-azmanpanel",
       "variants": {
@@ -20,6 +20,24 @@
         }
       },
       "protected": false
+    },
+    {
+      "id": "monitoringburz",
+      "name": "Monitoring Burz",
+      "version": "2026.08.07-2151",
+      "category": "Pluginy",
+      "description": "Monitoring wyładowań atmosferycznych.",
+      "python": ["3.12", "3.13", "3.14"],
+      "architecture": ["all"],
+      "package": "enigma2-plugin-extensions--azman-monitoringburz-py313",
+      "variants": {
+        "py313": {
+          "ipk": "py313/enigma2-plugin-extensions--azman-monitoringburz-py313_2026.08.07-2151_all.ipk",
+          "url": "https://www.topolowa4.pl/azman-feed/py313/enigma2-plugin-extensions--azman-monitoringburz-py313_2026.08.07-2151_all.ipk",
+          "sha256": "a656c34b38b61db27422445c83b2145bfa238502ef1a3a7ba81d8014ee679c4b"
+        }
+      },
+      "protected": true
     }
   ]
 }
