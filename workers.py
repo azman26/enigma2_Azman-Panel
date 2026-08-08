@@ -127,6 +127,7 @@ class PackageListWorker(BaseWorker):
 class ManifestPackageDownloadWorker(BaseWorker):
     """Pobiera pakiet z manifestu i weryfikuje jego SHA-256 przed instalacją."""
     MAX_PACKAGE_SIZE = 100 * 1024 * 1024
+    TEMP_DIR = "/tmp/.azmanpanel"
 
     def __init__(self, package_id, callback_finished):
         super(ManifestPackageDownloadWorker, self).__init__(callback_finished)
@@ -135,6 +136,7 @@ class ManifestPackageDownloadWorker(BaseWorker):
         self.package_path = None
 
     def run(self):
+        target = None
         try:
             with urllib.request.urlopen(constants.AZMAN_MANIFEST_URL, timeout=20) as response:
                 manifest = json.loads(response.read().decode("utf-8"))
@@ -148,12 +150,30 @@ class ManifestPackageDownloadWorker(BaseWorker):
                 variant = (entry.get("variants") or {}).get(tag)
                 if variant:
                     break
-            if not variant or not variant.get("url") or not variant.get("sha256"):
+            if not variant or not variant.get("sha256"):
                 raise ValueError("Brak zgodnego wariantu lub sumy SHA-256.")
-            target = os.path.join(tempfile.gettempdir(), os.path.basename(variant["url"]))
+            package_url = variant.get("url")
+            if entry.get("protected"):
+                query = urllib.parse.urlencode({
+                    "package_id": self.package_id,
+                    "variant": next((tag for tag in tags if (entry.get("variants") or {}).get(tag) == variant), "")
+                })
+                api_url = "%s?%s" % (constants.AZMAN_PACKAGE_URL_API, query)
+                with urllib.request.urlopen(api_url, timeout=20) as response:
+                    access = json.loads(response.read().decode("utf-8"))
+                package_url = access.get("url")
+                if not package_url:
+                    raise ValueError("Serwer nie udostępnił tymczasowego adresu pakietu.")
+            if not package_url:
+                raise ValueError("Brak adresu pobierania pakietu.")
+            os.makedirs(self.TEMP_DIR, mode=0o700, exist_ok=True)
+            os.chmod(self.TEMP_DIR, 0o700)
+            fd, target = tempfile.mkstemp(prefix=".package-", suffix=".ipk", dir=self.TEMP_DIR)
+            os.close(fd)
+            os.chmod(target, 0o600)
             digest = hashlib.sha256()
             size = 0
-            with urllib.request.urlopen(variant["url"], timeout=60) as response, open(target, "wb") as handle:
+            with urllib.request.urlopen(package_url, timeout=60) as response, open(target, "wb") as handle:
                 while True:
                     chunk = response.read(64 * 1024)
                     if not chunk:
@@ -172,6 +192,11 @@ class ManifestPackageDownloadWorker(BaseWorker):
             self.package_path = target
         except Exception as error:
             self.error_message = str(error)
+            if target:
+                try:
+                    os.unlink(target)
+                except OSError:
+                    pass
         finally:
             self._safe_call_main_thread(self.error_message, self.package_path)
 

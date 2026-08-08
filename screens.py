@@ -1,5 +1,7 @@
 import os
 import urllib.parse
+import subprocess
+import shlex
 from Components.ActionMap import ActionMap
 from Components.Label import Label
 from Components.Pixmap import Pixmap
@@ -116,6 +118,10 @@ class OpkgCommandScreen(Screen):
     def on_command_finished(self, result):
         self.is_finished = True
         self.appendText("\n\nPolecenie zakończone.")
+        if self.callback:
+            callback = self.callback
+            self.callback = None
+            callback()
         if self.restart_gui:
             self._ask_for_restart()
         else:
@@ -129,7 +135,9 @@ class OpkgCommandScreen(Screen):
     def keyOk(self):
         if self.is_finished:
             if self.callback:
-                self.callback()
+                callback = self.callback
+                self.callback = None
+                callback()
             self.close()
 
     def _ask_for_restart(self):
@@ -493,6 +501,11 @@ class AzmanPanelMainScreen(Screen):
         if self.get_item_category(item) != "Pluginy":
             self.session.open(MessageBox, "Przycisk Instaluj dotyczy pluginów z zakładki Pluginy.", type=MessageBox.TYPE_INFO)
             return
+        # Chronione pakiety są instalowane przez manifest i weryfikację SHA-256,
+        # a nie przez wyszukiwanie w publicznym Packages.gz.
+        if item["text"] == "Monitoring Burz":
+            self.start_monitoringburz_install()
+            return
         keyword = item["text"].lower().replace(" ", "")
         self._open_package_manager("Instalowanie - " + item["text"], filter_keywords=[keyword])
 
@@ -713,6 +726,34 @@ class AzmanPanelMainScreen(Screen):
         self.session.open(MessageBox, message, type=msg_type)
         
     def start_monitoringburz_install(self):
+        package_name = "enigma2-plugin-extensions--azman-monitoringburz-py313"
+        try:
+            installed = subprocess.run(
+                ["opkg", "list-installed"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=15,
+                check=False
+            ).stdout.decode("utf-8", errors="ignore")
+        except Exception:
+            installed = ""
+        if any(line.startswith(package_name + " ") or line.startswith(package_name + " -")
+               for line in installed.splitlines()):
+            self.session.openWithCallback(
+                self._confirm_monitoringburz_reinstall,
+                MessageBox,
+                "Monitoring Burz jest już zainstalowany.\n\nCzy chcesz go przeinstalować?",
+                MessageBox.TYPE_YESNO,
+                default=False
+            )
+            return
+        self._begin_monitoringburz_download()
+
+    def _confirm_monitoringburz_reinstall(self, confirmed):
+        if confirmed:
+            self._begin_monitoringburz_download()
+
+    def _begin_monitoringburz_download(self):
         message = ("Monitoring Burz jest pobierany z chronionego feeda.\n\n"
                    "Pobrany pakiet zostanie sprawdzony przez SHA-256 przed instalacją.\n\n"
                    "Czy chcesz kontynuować?")
@@ -735,16 +776,28 @@ class AzmanPanelMainScreen(Screen):
         if error_message:
             self.session.open(MessageBox, "Nie udało się przygotować instalacji:\n%s" % error_message, type=MessageBox.TYPE_ERROR)
             return
+        if not package_path or not os.path.isfile(package_path):
+            self.session.open(MessageBox, "Nie znaleziono pobranego pakietu.", type=MessageBox.TYPE_ERROR)
+            return
         self._handle_install_with_restart(
             "Instalowanie Monitoring Burz",
-            "opkg install %s" % package_path
+            "opkg install %s" % shlex.quote(package_path),
+            callback=lambda: self._remove_temporary_package(package_path)
         )
 
-    def _handle_install_with_restart(self, title, command):
+    def _remove_temporary_package(self, package_path):
+        try:
+            if package_path and os.path.isfile(package_path):
+                os.unlink(package_path)
+        except OSError as error:
+            utils.log_error(error, "remove temporary package", path=package_path)
+
+    def _handle_install_with_restart(self, title, command, callback=None):
         self.session.open(
             OpkgCommandScreen, 
             title=title, 
             command=command,
+            callback=callback,
             restart_gui=True
         )
 

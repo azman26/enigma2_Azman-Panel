@@ -5,8 +5,8 @@
 # Nie generować jej dynamicznie przy starcie Enigma2 — wersja ma oznaczać
 # konkretne wydanie, a nie czas ostatniego uruchomienia pluginu.
 PLUGIN_NAME = "Azman Panel"
-PLUGIN_VERSION = "2026.08.08-0125"
-PLUGIN_BUILD = "azman-panel-2026.08.08-0125"
+PLUGIN_VERSION = "2026.08.08-0246"
+PLUGIN_BUILD = "azman-panel-2026.08.08-0246"
 
 # --- Azman OPKG Feed ---
 FEED_CONF_URL = "https://raw.githubusercontent.com/azman26/azman-enigma2-repo/main/azman-feed.conf"
@@ -15,6 +15,7 @@ FEED_PACKAGES_BASE_URL = "https://azman26.github.io/azman-enigma2-repo"
 # Docelowy feed prywatny dla wariantów zależnych od środowiska.
 AZMAN_FEED_BASE_URL = "https://www.topolowa4.pl/azman-feed"
 AZMAN_MANIFEST_URL = "https://raw.githubusercontent.com/azman26/enigma2_Azman-Panel/main/feed/manifest.json"
+AZMAN_PACKAGE_URL_API = "https://www.topolowa4.pl/api/package-url.php"
 
 # --- Picons ---
 PICONS_BASE_URL = "https://www.topolowa4.pl/ENIGMA2/PICONY/"
