@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "repository": "Azman Feed",
-  "updated": "2026-08-07T23:30:00Z",
+  "updated": "2026-08-08T00:46:00Z",
   "packages": [
     {
       "id": "azman-panel",
       "name": "Azman Panel",
-      "version": "2026.08.08-0125",
+      "version": "2026.08.08-0246",
       "category": "system",
       "description": "Panel instalacyjny i narzędziowy ekosystemu Azman.",
       "python": ["3.12", "3.13", "3.14"],
@@ -14,9 +14,9 @@
       "package": "enigma2-plugin-extensions--azman-azmanpanel",
       "variants": {
         "all": {
-          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.08.08-0125_all.ipk",
-          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.08.08-0125/enigma2-plugin-extensions--azman-azmanpanel_2026.08.08-0125_all.ipk",
-          "sha256": "df1c6f3f9b8762f5a0d49f616358634b5e83df43ca91e653c80038433d46e7fd"
+          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.08.08-0246_all.ipk",
+          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.08.08-0246/enigma2-plugin-extensions--azman-azmanpanel_2026.08.08-0246_all.ipk",
+          "sha256": "be09f6a8bdd4c1836c77c0eed2fe6501fb7c525597ba621f0dccf0e92c16bf3c"
         }
       },
       "protected": false
@@ -33,7 +33,6 @@
       "variants": {
         "py313": {
           "ipk": "py313/enigma2-plugin-extensions--azman-monitoringburz-py313_2026.08.07-2151_all.ipk",
-          "url": "https://www.topolowa4.pl/azman-feed/py313/enigma2-plugin-extensions--azman-monitoringburz-py313_2026.08.07-2151_all.ipk",
           "sha256": "a656c34b38b61db27422445c83b2145bfa238502ef1a3a7ba81d8014ee679c4b"
         }
       },
