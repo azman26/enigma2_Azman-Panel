@@ -69,12 +69,6 @@ Format wersji:
 YYYY.MM.DD-HHMM
 ```
 
-Aktualna wersja:
-
-```text
-2026.08.07-2151
-```
-
 ## Licencja
 
 Azman Panel jest udostępniany na licencji:
@@ -88,12 +82,6 @@ Szczegóły znajdują się w pliku [LICENSE](LICENSE).
 ## Wydania
 
 Gotowe pakiety IPK są publikowane w sekcji [GitHub Releases](../../releases).
-
-Najnowszy pakiet:
-
-```text
-enigma2-plugin-extensions--azman-azmanpanel_2026.08.07-2151_all.ipk
-```
 
 ## Rozwój projektu
 
