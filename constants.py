@@ -5,8 +5,8 @@
 # Nie generować jej dynamicznie przy starcie Enigma2 — wersja ma oznaczać
 # konkretne wydanie, a nie czas ostatniego uruchomienia pluginu.
 PLUGIN_NAME = "Azman Panel"
-PLUGIN_VERSION = "2026.08.09-2216"
-PLUGIN_BUILD = "azman-panel-2026.08.09-2216"
+PLUGIN_VERSION = "2026.08.09-2248"
+PLUGIN_BUILD = "azman-panel-2026.08.09-2248"
 
 # --- Azman OPKG Feed ---
 FEED_CONF_URL = "https://raw.githubusercontent.com/azman26/azman-enigma2-repo/main/azman-feed.conf"

@@ -378,6 +378,15 @@ class AzmanPanelMainScreen(Screen):
             ("Airly", self.start_airly_install, "icon_airly.png", "Zainstaluj Monitoring jakości powietrza w Polsce i na świecie."),
         ]
         
+        coming_soon_names = (
+            "Polskie Żródła EPG", "Azman Player", "YT Playlist Player", "Shelly Control",
+            "MiHome Control", "Karcher Radio Control", "Kalendarz Ogrodnika",
+        )
+        menu_definitions = [
+            (text, (lambda name=text: self.show_coming_soon(name)) if text in coming_soon_names else func, icon, description)
+            for text, func, icon, description in menu_definitions
+        ]
+
         num_items = len(menu_definitions)
         items_to_add = (self.GRID_COLS - (num_items % self.GRID_COLS)) % self.GRID_COLS
         
@@ -537,6 +546,13 @@ class AzmanPanelMainScreen(Screen):
         if item_index >= len(self.menu_items):
             return
         item = self.menu_items[item_index]
+        coming_soon_names = (
+            "Polskie Żródła EPG", "Azman Player", "YT Playlist Player", "Shelly Control",
+            "MiHome Control", "Karcher Radio Control", "Kalendarz Ogrodnika",
+        )
+        if item["text"] in coming_soon_names:
+            self.show_coming_soon(item["text"])
+            return
         if self.get_item_category(item) != "Pluginy":
             self.session.open(MessageBox, "Przycisk Instaluj dotyczy pluginów z zakładki Pluginy.", type=MessageBox.TYPE_INFO)
             return
@@ -590,6 +606,14 @@ class AzmanPanelMainScreen(Screen):
 
     def show_work_in_progress(self):
         self.session.open(MessageBox, "Ta funkcja jest obecnie w budowie.\nZapraszamy wkrótce!", type=MessageBox.TYPE_INFO, title="Informacja")
+
+    def show_coming_soon(self, feature_name):
+        self.session.open(
+            MessageBox,
+            "%s bedzie dostepny w Azman Panel wkrotce." % feature_name,
+            type=MessageBox.TYPE_INFO,
+            title="Wkrotce",
+        )
 
     def _open_package_manager(self, title, filter_keywords=None):
         if os.path.exists(constants.FEED_CONF_TARGET_PATH):
