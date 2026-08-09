@@ -54,6 +54,23 @@
         }
       },
       "protected": true
+    },
+    {
+      "id": "airly",
+      "name": "Airly",
+      "version": "2.0-r6",
+      "category": "Pluginy",
+      "description": "Monitoring jakości powietrza w Polsce i na świecie.",
+      "python": ["3.12", "3.13", "3.14"],
+      "architecture": ["all"],
+      "package": "enigma2-plugin-extensions-airly",
+      "variants": {
+        "all": {
+          "ipk": "all/enigma2-plugin-extensions-airly_2.0-r6_all.ipk",
+          "sha256": "c0d41426f03687113cdd9cc35c611259fe6c80a4a37e095c79d150066929c93a"
+        }
+      },
+      "protected": true
     }
   ]
 }
