@@ -350,7 +350,7 @@ class AzmanPanelMainScreen(Screen):
         menu_definitions = [
             # --- GŁÓWNY ELEMENT EKOSYSTEMU ---
             ("Azman Player", self.open_azman_player, "icon_azmanplayer.png", "Otwórz główny odtwarzacz i menedżer kanałów Azman."),
-            ("Stacja Meteo MMz", self.show_work_in_progress, "icon_stacjameteommz.png", "Plugin stacji meteorologicznej MMz."),
+            ("Stacja Meteo MMz", self.start_stacjameteommz_install, "icon_stacjameteommz.png", "Zainstaluj plugin stacji meteorologicznej MMz."),
             # --- RZĄD 1 (Miejsca 1-6) ---
             ("Bukiety IPTV PL", self.open_iptv_bouquet_manager, "icon_iptv_pl.png", "Pobierz bukiety polskich kanałów IPTV."),
             ("Bukiety FAST", self.open_fast_bouquet_manager, "icon_fast.png", "Pobierz bukiety kanałów FAST."),
@@ -369,7 +369,7 @@ class AzmanPanelMainScreen(Screen):
             ("Monitor Burz", self.start_monitoringburz_install, "icon_monitoringburz.png", "Monitoring wyładowań atmosferycznych."),
             ("Kalendarz Ogrodnika", self.show_work_in_progress, "icon_kalendarzogrod.png", "Kalendarz i narzędzia ogrodnika."),
             # --- RZĄD 3 (Miejsca 13-18) ---
-            ("IMGW Meteo", lambda: self._start_feed_package_install("IMGW Meteo", "enigma2-plugin-extensions--azman-imgwmeteo"), "icon_imgwmeteo.png", "Zainstaluj plugin pogody IMGW Meteo."),
+            ("IMGW Meteo", self.start_imgwmeteo_install, "icon_imgwmeteo.png", "Zainstaluj plugin pogody IMGW Meteo."),
             ("Shelly Control", self.show_work_in_progress, "icon_shellycontrolcenter.png", "Ta funkcja jest w budowie."),
             ("MiHome Control", self.show_work_in_progress, "icon_mihomecontrol.png", "Zarządzanie urządzeniami Xiaomi Smart Home."),
             ("Archiv CZSK", self.start_archivczsk_install, "icon_archivczsk.png", "Zainstaluj plugin ArchivCZSK."),
@@ -544,6 +544,12 @@ class AzmanPanelMainScreen(Screen):
         # a nie przez wyszukiwanie w publicznym Packages.gz.
         if item["text"] == "Monitor Burz":
             self.start_monitoringburz_install()
+            return
+        if item["text"] == "Stacja Meteo MMz":
+            self.start_stacjameteommz_install()
+            return
+        if item["text"] == "IMGW Meteo":
+            self.start_imgwmeteo_install()
             return
         keyword = item["text"].lower().replace(" ", "")
         self._open_package_manager("Instalowanie - " + item["text"], filter_keywords=[keyword])
@@ -940,6 +946,100 @@ class AzmanPanelMainScreen(Screen):
             MessageBox,
             "Pobieranie i weryfikacja pakietu...",
             type=MessageBox.TYPE_INFO
+        )
+        self.current_worker.start()
+
+    def start_stacjameteommz_install(self):
+        package_name = "enigma2-plugin-extensions--azman-stacjameteommz-py313"
+        try:
+            installed = subprocess.run(
+                ["opkg", "list-installed"], stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, timeout=15, check=False
+            ).stdout.decode("utf-8", errors="ignore")
+        except Exception:
+            installed = ""
+        if any(line.startswith(package_name + " ") or line.startswith(package_name + " -")
+               for line in installed.splitlines()):
+            self.session.openWithCallback(
+                self._confirm_stacjameteommz_reinstall,
+                MessageBox,
+                "Stacja Meteo MMz jest już zainstalowana.\n\nCzy chcesz ją przeinstalować?",
+                MessageBox.TYPE_YESNO, default=False
+            )
+            return
+        self._begin_stacjameteommz_download()
+
+    def _confirm_stacjameteommz_reinstall(self, confirmed):
+        if confirmed:
+            self._begin_stacjameteommz_download()
+
+    def _begin_stacjameteommz_download(self):
+        message = (
+            "Stacja Meteo MMz jest pobierana z prywatnego, niepublicznego feeda autora.\n\n"
+            "Pobrany pakiet zostanie sprawdzony przez SHA-256 przed instalacją.\n\n"
+            "Czy chcesz kontynuować?"
+        )
+        self.session.openWithCallback(
+            self._confirm_stacjameteommz_install,
+            MessageBox, message, MessageBox.TYPE_YESNO, default=True
+        )
+
+    def _confirm_stacjameteommz_install(self, confirmed):
+        if not confirmed:
+            return
+        self._manifest_install_title = "Stacja Meteo MMz"
+        self.current_worker = ManifestPackageDownloadWorker(
+            "stacjameteommz", self._on_manifest_package_ready
+        )
+        self.download_messagebox = self.session.open(
+            MessageBox, "Pobieranie i weryfikacja pakietu...", type=MessageBox.TYPE_INFO
+        )
+        self.current_worker.start()
+
+    def start_imgwmeteo_install(self):
+        package_name = "enigma2-plugin-extensions--azman-imgwmeteo-py313"
+        try:
+            installed = subprocess.run(
+                ["opkg", "list-installed"], stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, timeout=15, check=False
+            ).stdout.decode("utf-8", errors="ignore")
+        except Exception:
+            installed = ""
+        if any(line.startswith(package_name + " ") or line.startswith(package_name + " -")
+               for line in installed.splitlines()):
+            self.session.openWithCallback(
+                self._confirm_imgwmeteo_reinstall,
+                MessageBox,
+                "IMGW Meteo jest już zainstalowany.\n\nCzy chcesz go przeinstalować?",
+                MessageBox.TYPE_YESNO, default=False
+            )
+            return
+        self._begin_imgwmeteo_download()
+
+    def _confirm_imgwmeteo_reinstall(self, confirmed):
+        if confirmed:
+            self._begin_imgwmeteo_download()
+
+    def _begin_imgwmeteo_download(self):
+        message = (
+            "IMGW Meteo jest pobierany z prywatnego, niepublicznego feeda autora.\n\n"
+            "Pobrany pakiet zostanie sprawdzony przez SHA-256 przed instalacją.\n\n"
+            "Czy chcesz kontynuować?"
+        )
+        self.session.openWithCallback(
+            self._confirm_imgwmeteo_install,
+            MessageBox, message, MessageBox.TYPE_YESNO, default=True
+        )
+
+    def _confirm_imgwmeteo_install(self, confirmed):
+        if not confirmed:
+            return
+        self._manifest_install_title = "IMGW Meteo"
+        self.current_worker = ManifestPackageDownloadWorker(
+            "imgwmeteo", self._on_manifest_package_ready
+        )
+        self.download_messagebox = self.session.open(
+            MessageBox, "Pobieranie i weryfikacja pakietu...", type=MessageBox.TYPE_INFO
         )
         self.current_worker.start()
 
