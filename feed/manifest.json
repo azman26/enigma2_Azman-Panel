@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "repository": "Azman Feed",
-  "updated": "2026-08-09T20:40:00Z",
+  "updated": "2026-08-09T22:16:00Z",
   "packages": [
     {
       "id": "azman-panel",
@@ -51,6 +51,23 @@
         "py313": {
           "ipk": "py313/enigma2-plugin-extensions--azman-stacjameteommz-py313_2026.08.09-2020_all.ipk",
           "sha256": "eeacd6bcec87ebdb1d91ab316a876f8ef728ab905b42720a474692c0904c633c"
+        }
+      },
+      "protected": true
+    },
+    {
+      "id": "imgwmeteo",
+      "name": "IMGW Meteo",
+      "version": "2026.08.09-2159",
+      "category": "Pluginy",
+      "description": "Prognoza pogody, mapy i ostrzeżenia IMGW.",
+      "python": ["3.13"],
+      "architecture": ["all"],
+      "package": "enigma2-plugin-extensions--azman-imgwmeteo-py313",
+      "variants": {
+        "py313": {
+          "ipk": "py313/enigma2-plugin-extensions--azman-imgwmeteo-py313_2026.08.09-2159_all.ipk",
+          "sha256": "3cf0f9f0ecc0ed53944650f160c2b32ce96fbcc11413106b92200697dbb1d687"
         }
       },
       "protected": true
