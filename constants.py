@@ -5,8 +5,8 @@
 # Nie generować jej dynamicznie przy starcie Enigma2 — wersja ma oznaczać
 # konkretne wydanie, a nie czas ostatniego uruchomienia pluginu.
 PLUGIN_NAME = "Azman Panel"
-PLUGIN_VERSION = "2026.08.08-0246"
-PLUGIN_BUILD = "azman-panel-2026.08.08-0246"
+PLUGIN_VERSION = "2026.08.09-2020"
+PLUGIN_BUILD = "azman-panel-2026.08.09-1959"
 
 # --- Azman OPKG Feed ---
 FEED_CONF_URL = "https://raw.githubusercontent.com/azman26/azman-enigma2-repo/main/azman-feed.conf"
@@ -18,8 +18,34 @@ AZMAN_MANIFEST_URL = "https://raw.githubusercontent.com/azman26/enigma2_Azman-Pa
 AZMAN_PACKAGE_URL_API = "https://www.topolowa4.pl/api/package-url.php"
 
 # --- Picons ---
-PICONS_BASE_URL = "https://www.topolowa4.pl/ENIGMA2/PICONY/"
+PICONS_BASE_URL = "https://www.topolowa4.pl/api/picons-list.php"
+PICON_URL_API = "https://www.topolowa4.pl/api/picon-url.php"
 DEFAULT_PICON_TARGET_DIR = "/media/hdd/picon"
+MYRADIOONLINE_API_URL = (
+    "https://myradioonline.pl/radio-api/get-radios-v2/app-auth/andr1439/"
+    "9dcc7a63f7426ed590982a7ddfa5b56ad820818df50550428bdfa4db3fbbe498299231aedde1577c3ef6b43b7a66243eb5df62864e439e329a0dc2d712e43d29"
+)
+MYRADIOONLINE_BOUQUET_FILENAME = "userbouquet.azman_iptv_myradioonline.tv"
+POLSKIE_RADIO_BOUQUET_FILENAME = "userbouquet.azman_iptv_polskieradio.tv"
+RMFON_BOUQUET_FILENAME = "userbouquet.azman_iptv_rmfon.tv"
+EUROZET_BOUQUET_FILENAME = "userbouquet.azman_iptv_eurozet.tv"
+RMFON_API_URL = "https://api.rmfon.pl/"
+EUROZET_API_URL = "https://player.chillizet.pl/api/"
+EUROZET_STATIONS = (("radiozet", "Radio ZET"), ("antyradio", "ANTYRADIO"), ("meloradio", "Meloradio"), ("chillizet", "Chillizet"))
+POLSKIE_RADIO_STREAMS = (
+    ("Jedynka", "https://stream11.polskieradio.pl/pr1/pr1.sdp/playlist.m3u8"),
+    ("Dwójka", "https://stream12.polskieradio.pl/pr2/pr2.sdp/playlist.m3u8"),
+    ("Trójka", "https://stream13.polskieradio.pl/pr3/pr3.sdp/playlist.m3u8"),
+    ("Czwórka", "https://stream14.polskieradio.pl/pr4/pr4.sdp/playlist.m3u8"),
+    ("Polskie Radio 24", "https://stream15.polskieradio.pl/pr24/pr24.sdp/playlist.m3u8"),
+    ("Polskie Radio Chopin", "https://stream85.polskieradio.pl/live/rytm.sdp/playlist.m3u8"),
+    ("Polskie Radio Dzieciom", "https://stream85.polskieradio.pl/live/radio_dzieciom.sdp/playlist.m3u8"),
+    ("Polskie Radio Kierowców", "https://stream10.polskieradio.pl/prk/rdk.sdp/playlist.m3u"),
+    ("Polskie Radio dla Zagranicy DAB+", "https://stream85.polskieradio.pl/pr5/pr5_dab.sdp/playlist.m3u8"),
+    ("Polskie Radio dla Zagranicy Wschód", "https://stream85.polskieradio.pl/pr5/pr5_wsch.sdp/playlist.m3u8"),
+    ("Polskie Radio dla Zagranicy Polska", "https://stream85.polskieradio.pl/pr5/pr5.sdp/playlist.m3u8"),
+    ("Polskie Radio dla Ukrainy", "https://stream85.polskieradio.pl/radio_ukraina/ukraina.stream/playlist.m3u8"),
+)
 PICON_RECOMMENDED_DIRS = [
     ("/media/hdd/picon", "Dysk twardy HDD (/media/hdd/picon)"),
     ("/media/usb/picon", "Pamięć USB (/media/usb/picon)")

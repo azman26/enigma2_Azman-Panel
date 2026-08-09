@@ -12,8 +12,10 @@ import tempfile
 import zipfile
 import json
 import hashlib
+from datetime import datetime
 from enigma import eTimer, eDVBDB
 from . import constants, utils, runtime
+from .epg_mapper import PanelEpgMapper
 
 class BaseWorker(threading.Thread):
     # ... (bez zmian) ...
@@ -209,8 +211,9 @@ class PiconZipListWorker(BaseWorker):
     def run(self):
         try:
             with urllib.request.urlopen(constants.PICONS_BASE_URL, timeout=10) as response:
-                html = response.read().decode('utf-8')
-            self.picon_zip_filenames = sorted(re.findall(r'href="([^"]+\.zip)"', html), key=lambda x: x.lower())
+                payload = json.loads(response.read().decode('utf-8'))
+            self.picon_zip_filenames = [item['name'] for item in payload.get('packages', []) if item.get('name')]
+            self.picon_zip_filenames.sort(key=lambda x: x.lower())
             if not self.picon_zip_filenames:
                 self.error_message = "Nie znaleziono plików *.zip w katalogu picon."
         except Exception as e:
@@ -244,8 +247,14 @@ class PiconInstallationWorker(ProgressWorkerMixin, BaseWorker):
                     display_filename = urllib.parse.unquote(zip_filename)
                     self._safe_call_progress(i, total_zips, f"Pobieranie: {display_filename}")
                     
-                    temp_zip_path = os.path.join(temp_dir, zip_filename)
-                    picon_zip_url = urllib.parse.urljoin(constants.PICONS_BASE_URL, zip_filename)
+                    safe_name = os.path.basename(zip_filename)
+                    temp_zip_path = os.path.join(temp_dir, safe_name)
+                    query = urllib.parse.urlencode({'name': safe_name})
+                    with urllib.request.urlopen(constants.PICON_URL_API + '?' + query, timeout=20) as response:
+                        access = json.loads(response.read().decode('utf-8'))
+                    picon_zip_url = access.get('url')
+                    if not picon_zip_url:
+                        raise ValueError("Serwer nie udostępnił paczki picon.")
                     urllib.request.urlretrieve(picon_zip_url, temp_zip_path, reporthook=self._internal_reporthook)
                     
                     self._safe_call_progress(i, total_zips, f"Rozpakowywanie: {display_filename}")
@@ -440,6 +449,205 @@ class SourcesXmlDownloadWorker(BaseWorker):
         finally:
             if not self._is_cancelled:
                 self._safe_call_main_thread(self.error_message, self.final_message)
+
+class MyRadioOnlineBouquetWorker(BaseWorker):
+    """Pobiera publiczny katalog MyRadioOnline i tworzy bukiet radiowy."""
+
+    def __init__(self, callback_finished):
+        super(MyRadioOnlineBouquetWorker, self).__init__(callback_finished)
+
+    @staticmethod
+    def _bitrate(value):
+        match = re.search(r"\d+", str(value or ""))
+        return int(match.group(0)) if match else 0
+
+    def run(self):
+        bouquet_path = os.path.join("/etc/enigma2", constants.MYRADIOONLINE_BOUQUET_FILENAME)
+        bouquets_tv_path = "/etc/enigma2/bouquets.tv"
+        try:
+            now = datetime.now().strftime("%Y-%m-%d_%H")
+            request = urllib.request.Request(
+                constants.MYRADIOONLINE_API_URL,
+                data=urllib.parse.urlencode({
+                    "ver": "andr1439",
+                    "sec-key": "a_febe521d77cbd235bc27268789e8592bb9378cb47e4e5fd5dc89493578a64049ec2c8282eda9a80d720e656c8639ba7ea1d5bf8812b0a5a198373164acf35fd6",
+                    "time": now,
+                }).encode("utf-8"),
+                headers={
+                    "User-Agent": "okhttp/3.12.12 - hu.myonlineradio.radio.pl.myonlineradio.onlineradioapplication",
+                    "Referer": "https://myradioonline.pl",
+                    "Accept": "application/json",
+                },
+            )
+            with urllib.request.urlopen(request, timeout=25) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            radios = payload.get("radios") if isinstance(payload, dict) else []
+            epg_mapper = PanelEpgMapper()
+            lines = ["#NAME MyRadioOnline (azman)\n"]
+            seen = set()
+            count = 0
+            for radio in radios or []:
+                if not isinstance(radio, dict):
+                    continue
+                name = str(radio.get("r_name") or "").strip()
+                streams = radio.get("streamServers") or {}
+                candidates = []
+                for stream in streams.values():
+                    if not isinstance(stream, dict):
+                        continue
+                    url = str(stream.get("rsu_url") or "").strip()
+                    if url.startswith(("http://", "https://")):
+                        candidates.append((self._bitrate(stream.get("rsu_bandwidth")), url))
+                if not name or not candidates:
+                    continue
+                candidates.sort(key=lambda item: item[0], reverse=True)
+                bitrate, stream_url = candidates[0]
+                if stream_url in seen:
+                    continue
+                seen.add(stream_url)
+                safe_name = re.sub(r"[\r\n:]", " ", name).strip()
+                encoded_url = urllib.parse.quote(stream_url, safe="")
+                epg_reference = epg_mapper.reference(safe_name)
+                service_prefix = "4097:%s" % epg_reference if epg_reference else "4097:0:2:0:0:0:0:0:0:0"
+                lines.append("#SERVICE %s:%s:%s\n" % (service_prefix, encoded_url, safe_name))
+                lines.append("#DESCRIPTION %s\n" % safe_name)
+                count += 1
+            if not count:
+                raise ValueError("Nie znaleziono dostępnych stacji radiowych.")
+            utils.atomic_write_lines(bouquet_path, lines)
+            service_line = '#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet' % constants.MYRADIOONLINE_BOUQUET_FILENAME
+            existing = []
+            if os.path.exists(bouquets_tv_path):
+                with open(bouquets_tv_path, "r") as handle:
+                    existing = handle.readlines()
+            if not any(constants.MYRADIOONLINE_BOUQUET_FILENAME in line for line in existing):
+                existing.append(service_line + "\n")
+                utils.atomic_write_lines(bouquets_tv_path, existing)
+            db = eDVBDB.getInstance()
+            db.reloadBouquets()
+            db.reloadServicelist()
+            self.final_message = "Utworzono bukiet MyRadioOnline.\n\nDodano %d stacji radiowych." % count
+        except Exception as error:
+            utils.log_error(error, self.__class__.__name__, target=bouquet_path)
+            self.error_message = "Nie udało się utworzyć bukietu MyRadioOnline:\n%s" % error
+        finally:
+            if not self._is_cancelled:
+                self._safe_call_main_thread(getattr(self, "error_message", None), getattr(self, "final_message", None))
+
+
+class PolskieRadioBouquetWorker(BaseWorker):
+    def __init__(self, callback_finished):
+        super(PolskieRadioBouquetWorker, self).__init__(callback_finished)
+
+    def run(self):
+        bouquet_name = constants.POLSKIE_RADIO_BOUQUET_FILENAME
+        bouquet_path = os.path.join("/etc/enigma2", bouquet_name)
+        bouquets_tv_path = "/etc/enigma2/bouquets.tv"
+        try:
+            epg_mapper = PanelEpgMapper()
+            lines = ["#NAME Polskie Radio (azman)\n"]
+            for name, stream_url in constants.POLSKIE_RADIO_STREAMS:
+                safe_name = re.sub(r"[\r\n:]", " ", name).strip()
+                encoded_url = urllib.parse.quote(stream_url, safe="")
+                epg_reference = epg_mapper.reference(safe_name)
+                service_prefix = "4097:%s" % epg_reference if epg_reference else "4097:0:2:0:0:0:0:0:0:0"
+                lines.append("#SERVICE %s:%s:%s\n" % (service_prefix, encoded_url, safe_name))
+                lines.append("#DESCRIPTION %s\n" % safe_name)
+            utils.atomic_write_lines(bouquet_path, lines)
+            service_line = '#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet' % bouquet_name
+            existing = []
+            if os.path.exists(bouquets_tv_path):
+                with open(bouquets_tv_path, "r") as handle:
+                    existing = handle.readlines()
+            if not any(bouquet_name in line for line in existing):
+                existing.append(service_line + "\n")
+                utils.atomic_write_lines(bouquets_tv_path, existing)
+            db = eDVBDB.getInstance()
+            db.reloadBouquets()
+            db.reloadServicelist()
+            self.final_message = "Utworzono bukiet Polskie Radio.\n\nDodano %d stacji radiowych." % len(constants.POLSKIE_RADIO_STREAMS)
+        except Exception as error:
+            utils.log_error(error, self.__class__.__name__, target=bouquet_path)
+            self.error_message = "Nie udało się utworzyć bukietu Polskie Radio:\n%s" % error
+        finally:
+            if not self._is_cancelled:
+                self._safe_call_main_thread(getattr(self, "error_message", None), getattr(self, "final_message", None))
+
+
+class _RadioApiBouquetWorker(BaseWorker):
+    def _write_bouquet(self, filename, title, stations):
+        path = os.path.join("/etc/enigma2", filename)
+        lines = ["#NAME %s (azman)\n" % title]
+        mapper = PanelEpgMapper()
+        for name, url in stations:
+            name = re.sub(r"[\r\n:]", " ", str(name)).strip()
+            encoded = urllib.parse.quote(str(url), safe="")
+            reference = mapper.reference(name)
+            prefix = "4097:%s" % reference if reference else "4097:0:2:0:0:0:0:0:0:0"
+            lines.append("#SERVICE %s:%s:%s\n" % (prefix, encoded, name))
+            lines.append("#DESCRIPTION %s\n" % name)
+        if not stations:
+            raise ValueError("Nie znaleziono dostępnych stacji radiowych.")
+        utils.atomic_write_lines(path, lines)
+        bouquets = "/etc/enigma2/bouquets.tv"
+        existing = open(bouquets, "r").readlines() if os.path.exists(bouquets) else []
+        marker = '#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet\n' % filename
+        if not any(filename in line for line in existing):
+            existing.append(marker)
+            utils.atomic_write_lines(bouquets, existing)
+        db = eDVBDB.getInstance()
+        db.reloadBouquets()
+        db.reloadServicelist()
+
+
+class RmfonBouquetWorker(_RadioApiBouquetWorker):
+    def run(self):
+        try:
+            headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+            req = urllib.request.Request(constants.RMFON_API_URL + "stations", headers=headers)
+            with urllib.request.urlopen(req, timeout=25) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            stations = []
+            for item in payload if isinstance(payload, list) else payload.get("stations", []):
+                sid = item.get("id") or item.get("station_id")
+                name = item.get("name") or item.get("title")
+                if not sid or not name: continue
+                req = urllib.request.Request(constants.RMFON_API_URL + "stations/%s/streams" % sid, headers=headers)
+                with urllib.request.urlopen(req, timeout=25) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+                candidates = []
+                for key in ("playlist", "playlistMp3"):
+                    group = data.get(key, {}) if isinstance(data, dict) else {}
+                    values = group.get("item", []) if key == "playlist" else group.get("item_mp3", [])
+                    candidates.extend(v for v in values if isinstance(v, str) and v.startswith("http"))
+                if candidates: stations.append((name, candidates[0]))
+            self._write_bouquet(constants.RMFON_BOUQUET_FILENAME, "RMF ON", stations)
+            self.final_message = "Utworzono bukiet RMF ON.\n\nDodano %d stacji radiowych." % len(stations)
+        except Exception as error:
+            self.error_message = "Nie udało się utworzyć bukietu RMF ON:\n%s" % error
+        finally:
+            if not self._is_cancelled: self._safe_call_main_thread(getattr(self, "error_message", None), getattr(self, "final_message", None))
+
+
+class EurozetBouquetWorker(_RadioApiBouquetWorker):
+    def run(self):
+        try:
+            headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+            stations = []
+            for slug, title in constants.EUROZET_STATIONS:
+                url = constants.EUROZET_API_URL + "stations/(station)/" + slug
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=25) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+                stream = ((data.get("player") or {}).get("stream") if isinstance(data, dict) else None)
+                if stream: stations.append((title, stream))
+            self._write_bouquet(constants.EUROZET_BOUQUET_FILENAME, "Eurozet", stations)
+            self.final_message = "Utworzono bukiet Eurozet.\n\nDodano %d stacji radiowych." % len(stations)
+        except Exception as error:
+            self.error_message = "Nie udało się utworzyć bukietu Eurozet:\n%s" % error
+        finally:
+            if not self._is_cancelled: self._safe_call_main_thread(getattr(self, "error_message", None), getattr(self, "final_message", None))
+
 
 class IptvOrgWorker(BaseWorker):
     def __init__(self, callback_finished):

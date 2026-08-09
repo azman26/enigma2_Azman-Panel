@@ -106,5 +106,6 @@ def safe_extract_zip_member(zip_ref, member, target_dir):
     if not member.is_dir():
         parent_dir = os.path.dirname(target_path)
         os.makedirs(parent_dir, exist_ok=True)
+        # Tryb wb celowo nadpisuje istniejący picon o tej samej nazwie.
         with zip_ref.open(member, 'r') as source, open(target_path, 'wb') as target:
             shutil.copyfileobj(source, target)
