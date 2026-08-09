@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "repository": "Azman Feed",
-  "updated": "2026-08-08T00:46:00Z",
+  "updated": "2026-08-09T20:40:00Z",
   "packages": [
     {
       "id": "azman-panel",
       "name": "Azman Panel",
-      "version": "2026.08.08-0246",
+      "version": "2026.08.08-0333",
       "category": "system",
       "description": "Panel instalacyjny i narzędziowy ekosystemu Azman.",
       "python": ["3.12", "3.13", "3.14"],
@@ -14,17 +14,17 @@
       "package": "enigma2-plugin-extensions--azman-azmanpanel",
       "variants": {
         "all": {
-          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.08.08-0246_all.ipk",
-          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.08.08-0246/enigma2-plugin-extensions--azman-azmanpanel_2026.08.08-0246_all.ipk",
-          "sha256": "be09f6a8bdd4c1836c77c0eed2fe6501fb7c525597ba621f0dccf0e92c16bf3c"
+          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.08.08-0333_all.ipk",
+          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.08.08-0333/enigma2-plugin-extensions--azman-azmanpanel_2026.08.08-0333_all.ipk",
+          "sha256": "8ee269fd826f6ac9e62a90eaccad49455aa880caf7ca1ef89dbc78c0ac031732"
         }
       },
       "protected": false
     },
     {
       "id": "monitoringburz",
-      "name": "Monitoring Burz",
-      "version": "2026.08.07-2151",
+      "name": "Monitor Burz",
+      "version": "2026.08.09-2020",
       "category": "Pluginy",
       "description": "Monitoring wyładowań atmosferycznych.",
       "python": ["3.13"],
@@ -32,8 +32,25 @@
       "package": "enigma2-plugin-extensions--azman-monitoringburz-py313",
       "variants": {
         "py313": {
-          "ipk": "py313/enigma2-plugin-extensions--azman-monitoringburz-py313_2026.08.07-2151_all.ipk",
-          "sha256": "a656c34b38b61db27422445c83b2145bfa238502ef1a3a7ba81d8014ee679c4b"
+          "ipk": "py313/enigma2-plugin-extensions--azman-monitoringburz-py313_2026.08.09-2020_all.ipk",
+          "sha256": "e2a38779ef9e289c05335402d66ff1b1f57b273dfd703e865ae5b3194d1c6653"
+        }
+      },
+      "protected": true
+    },
+    {
+      "id": "stacjameteommz",
+      "name": "Stacja Meteo MMz",
+      "version": "2026.08.09-2020",
+      "category": "Pluginy",
+      "description": "Pogoda i dane meteorologiczne dla Mińska Mazowieckiego.",
+      "python": ["3.13"],
+      "architecture": ["all"],
+      "package": "enigma2-plugin-extensions--azman-stacjameteommz-py313",
+      "variants": {
+        "py313": {
+          "ipk": "py313/enigma2-plugin-extensions--azman-stacjameteommz-py313_2026.08.09-2020_all.ipk",
+          "sha256": "eeacd6bcec87ebdb1d91ab316a876f8ef728ab905b42720a474692c0904c633c"
         }
       },
       "protected": true
