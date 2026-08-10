@@ -18,7 +18,7 @@ from Tools.LoadPixmap import LoadPixmap
 from skin import loadSkin
 from enigma import eTimer, eConsoleAppContainer
 
-from . import constants, utils
+from . import constants, runtime, utils
 from .workers import PiconZipListWorker, PiconInstallationWorker, PrivateBouquetListWorker, PrivateBouquetInstallWorker, IptvBouquetUninstallWorker, IptvOrgWorker, MyRadioOnlineBouquetWorker, PolskieRadioBouquetWorker, RmfonBouquetWorker, EurozetBouquetWorker, PackageListWorker, ManifestPackageDownloadWorker, SatellitesXmlUpdateWorker
 from .config import config, save_config
 
@@ -623,6 +623,7 @@ class AzmanPanelMainScreen(Screen):
             self.menu_items.sort(key=lambda item: order_map.get(item["text"], len(order_map)))
         if selected_tab == "Info":
             self.menu_items = []
+            python_version = runtime.get_runtime_info()["python"]
             self["info_content"].setText(
                 "Azman Panel\n\n"
                 "Centralny panel narzędziowy ekosystemu Azman dla Enigma2.\n\n"
@@ -643,6 +644,8 @@ class AzmanPanelMainScreen(Screen):
                 "Centralny panel instalacyjny i narzedziowy dla Enigma2.\n\n"
                 "Panel jest instalowany jako pierwszy plugin na dekoderze.\n"
                 "Z niego instalujesz pluginy Azman, bukiety, EPG, picony i inne narzedzia.\n\n"
+                "Srodowisko Python dekodera: %s\n"
+                "Panel instaluje tylko paczki zgodne z ta wersja.\n\n"
                 "Wersja panelu: %s\n"
                 "Wersjonowanie: YYYY.MM.DD-HHMM\n\n"
                 "ZIELONY - wlacz/wylacz widocznosc Panelu w glownym menu Enigma2\n\n"
@@ -651,7 +654,7 @@ class AzmanPanelMainScreen(Screen):
                 "ZIELONY - instaluj zaznaczony plugin\n"
                 "ZOLTY - poprzednia zakladka\n"
                 "NIEBIESKI - nastepna zakladka\n"
-                "CZERWONY - zamknij panel" % constants.PLUGIN_VERSION
+                "CZERWONY - zamknij panel" % (python_version, constants.PLUGIN_VERSION)
             )
             self["info_content"].show()
             self["key_green"].setText("Widocznosc menu")

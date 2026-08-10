@@ -193,19 +193,16 @@ class ManifestPackageDownloadWorker(BaseWorker):
                           if item.get("id") == self.package_id), None)
             if not entry:
                 raise ValueError("Pakiet nie występuje w manifeście.")
-            tags = runtime.package_runtime_tags()
-            variant = None
-            for tag in tags:
-                variant = (entry.get("variants") or {}).get(tag)
-                if variant:
-                    break
+            variant, variant_tag, compatibility_error = runtime.select_manifest_variant(entry)
+            if compatibility_error:
+                raise ValueError(compatibility_error)
             if not variant or not variant.get("sha256"):
                 raise ValueError("Brak zgodnego wariantu lub sumy SHA-256.")
             package_url = variant.get("url")
             if entry.get("protected"):
                 query = urllib.parse.urlencode({
                     "package_id": self.package_id,
-                    "variant": next((tag for tag in tags if (entry.get("variants") or {}).get(tag) == variant), "")
+                    "variant": variant_tag
                 })
                 api_url = "%s?%s" % (constants.AZMAN_PACKAGE_URL_API, query)
                 with urllib.request.urlopen(api_url, timeout=20) as response:
