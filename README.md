@@ -18,6 +18,9 @@ Po zakończeniu instalacji uruchom ponownie interfejs Enigma2:
 
 ```sh
 systemctl restart enigma2
+lub
+init 4
+init 3
 ```
 
 Azman Panel będzie dostępny w menu wtyczek oraz — po włączeniu tej opcji w zakładce Info — w głównym menu Enigma2.
