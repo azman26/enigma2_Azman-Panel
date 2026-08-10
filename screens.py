@@ -545,7 +545,7 @@ class AzmanPanelMainScreen(Screen):
             ("IPTV.ORG", self.start_iptv_org_install, "icon_iptvorg.png", "Tworzy aktualny bukiet polskich kana\u0142\u00f3w z publicznej listy IPTV.ORG."),
             ("Picons", self.open_picon_manager, "icon_picons.png", "Pobieranie i instalacja picon\u00f3w kana\u0142\u00f3w do wybranej lokalizacji na dekoderze."),
             ("Karcher Radio Control", lambda: self.show_coming_soon("Karcher Radio Control"), "icon_karcherradiocontrol.png", "Sterowanie radiem Karcher, szybki dost\u0119p do jego funkcji oraz odczyt RDS aktualnie granej stacji."),
-            ("YT Playlist Player", self.show_work_in_progress, "icon_ytplaylistplayer.png", "Wygodne odtwarzanie w\u0142asnych playlist YouTube na ekranie Enigma2."),
+            ("YT Playlist Player", self.start_ytplaylistplayer_install, "icon_ytplaylistplayer.png", "Wygodne odtwarzanie w\u0142asnych playlist YouTube na ekranie Enigma2."),
             ("Monitor Burz", self.start_monitoringburz_install, "icon_monitoringburz.png", "Bie\u017c\u0105cy podgl\u0105d wy\u0142adowa\u0144 atmosferycznych i aktywno\u015bci burzowej."),
             ("Kalendarz Ogrodnika", self.show_work_in_progress, "icon_kalendarzogrod.png", "Kalendarz, porady ogrodnicze, fazy Ksi\u0119\u017cyca i informacje pomocne w planowaniu prac."),
             
@@ -560,7 +560,7 @@ class AzmanPanelMainScreen(Screen):
         ]
         
         coming_soon_names = (
-            "Bukiety FAST", "Polskie \u017ar\xf3d\u0142a EPG", "Azman Player", "YT Playlist Player",
+            "Bukiety FAST", "Polskie \u017ar\xf3d\u0142a EPG", "Azman Player",
             "Shelly Control", "MiHome Control", "Karcher Radio Control", "Kalendarz Ogrodnika",
         )
         menu_definitions = [
@@ -728,7 +728,7 @@ class AzmanPanelMainScreen(Screen):
             return
         item = self.menu_items[item_index]
         coming_soon_names = (
-            "Bukiety FAST", "Polskie \u017ar\xf3d\u0142a EPG", "Azman Player", "YT Playlist Player",
+            "Bukiety FAST", "Polskie \u017ar\xf3d\u0142a EPG", "Azman Player",
             "Shelly Control", "MiHome Control", "Karcher Radio Control", "Kalendarz Ogrodnika",
         )
         if item["text"] in coming_soon_names:
@@ -747,6 +747,9 @@ class AzmanPanelMainScreen(Screen):
             return
         if item["text"] == "IMGW Meteo":
             self.start_imgwmeteo_install()
+            return
+        if item["text"] == "YT Playlist Player":
+            self.start_ytplaylistplayer_install()
             return
         keyword = item["text"].lower().replace(" ", "")
         self._open_package_manager("Instalowanie - " + item["text"], filter_keywords=[keyword])
@@ -1254,6 +1257,33 @@ class AzmanPanelMainScreen(Screen):
         )
         self.download_messagebox = self.session.open(
             MessageBox, "Pobieranie i weryfikacja pakietu...", type=MessageBox.TYPE_INFO
+        )
+        self.current_worker.start()
+
+    def start_ytplaylistplayer_install(self):
+        message = (
+            "YT Playlist Player jest pobierany z prywatnego, niepublicznego feeda autora.\n\n"
+            "Wymagana biblioteka: python3-yt-dlp.\n"
+            "Zostanie zainstalowana automatycznie przez opkg, jezeli nie ma jej na dekoderze.\n\n"
+            "Pobrany pakiet zostanie sprawdzony przez SHA-256 przed instalacja.\n\n"
+            "Czy chcesz kontynuowac?"
+        )
+        self.session.openWithCallback(
+            self._confirm_ytplaylistplayer_install,
+            MessageBox, message, MessageBox.TYPE_YESNO, default=True
+        )
+
+    def _confirm_ytplaylistplayer_install(self, confirmed):
+        if not confirmed:
+            return
+        self._manifest_install_title = "YT Playlist Player"
+        self.current_worker = ManifestPackageDownloadWorker(
+            "ytplaylistplayer", self._on_manifest_package_ready
+        )
+        self.download_messagebox = self.session.open(
+            MessageBox,
+            "Pobieranie i weryfikacja pakietu...",
+            type=MessageBox.TYPE_INFO
         )
         self.current_worker.start()
 
