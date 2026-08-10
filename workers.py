@@ -12,6 +12,8 @@ import tempfile
 import zipfile
 import json
 import hashlib
+import shutil
+from xml.etree import ElementTree
 from datetime import datetime
 from enigma import eTimer, eDVBDB
 from . import constants, utils, runtime
@@ -42,6 +44,51 @@ class BaseWorker(threading.Thread):
     def _internal_reporthook(self, count, block_size, total_size):
         if self._is_cancelled:
             raise InterruptedError("Download cancelled by user")
+
+class SatellitesXmlUpdateWorker(BaseWorker):
+    MAX_SIZE = 10 * 1024 * 1024
+
+    def __init__(self, source_name, source_url, target_paths, callback_finished):
+        super(SatellitesXmlUpdateWorker, self).__init__(callback_finished)
+        self.source_name = source_name
+        self.source_url = source_url
+        self.target_paths = target_paths
+
+    def run(self):
+        try:
+            request = urllib.request.Request(self.source_url, headers={"User-Agent": "AzmanPanel/1.0"})
+            with urllib.request.urlopen(request, timeout=30) as response:
+                data = response.read(self.MAX_SIZE + 1)
+            if len(data) > self.MAX_SIZE:
+                raise ValueError("Pobrany plik satellites.xml jest zbyt duży.")
+            root = ElementTree.fromstring(data)
+            if root.tag != "satellites":
+                raise ValueError("Pobrany plik nie jest poprawnym satellites.xml.")
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            saved = []
+            for path in self.target_paths:
+                directory = os.path.dirname(path)
+                if not os.path.isdir(directory):
+                    os.makedirs(directory)
+                if os.path.exists(path):
+                    shutil.copy2(path, "%s.bak-%s" % (path, timestamp))
+                fd, temporary_path = tempfile.mkstemp(prefix=".azmanpanel-sat-", dir=directory)
+                try:
+                    with os.fdopen(fd, "wb") as handle:
+                        handle.write(data)
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                    os.replace(temporary_path, path)
+                except Exception:
+                    if os.path.exists(temporary_path):
+                        os.unlink(temporary_path)
+                    raise
+                saved.append(path)
+            message = "Zaktualizowano satellites.xml ze źródła %s.\n\nZapisano: %s\nPrzed zapisem utworzono kopię istniejącego pliku." % (self.source_name, ", ".join(saved))
+            self._safe_call_main_thread(None, message)
+        except Exception as error:
+            utils.log_error(error, self.__class__.__name__, source=self.source_url)
+            self._safe_call_main_thread("Nie udało się zaktualizować satellites.xml: %s" % error, None)
 
 class ProgressWorkerMixin:
     """Wspólna obsługa bezpiecznego raportowania postępu do GUI."""
@@ -326,15 +373,18 @@ class IptvBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
         bouquets_tv_path = os.path.join(target_dir, "bouquets.tv")
         
         try:
-            self.selected_bouquets = [utils.validate_bouquet_filename(name) for name in self.selected_bouquets]
-            total_bouquets = len(self.selected_bouquets)
-            for i, filename in enumerate(self.selected_bouquets):
+            source_filenames = [utils.validate_bouquet_filename(name) for name in self.selected_bouquets]
+            filenames = [utils.panel_bouquet_filename(name) for name in source_filenames]
+            total_bouquets = len(source_filenames)
+            for i, (source_filename, filename) in enumerate(zip(source_filenames, filenames)):
                 if self._is_cancelled: raise InterruptedError("Installation cancelled")
-                self._safe_call_progress(i, total_bouquets, f"Pobieranie: {filename}")
+                self._safe_call_progress(i, total_bouquets, f"Pobieranie: {source_filename}")
                 
-                download_url = self.base_url + filename
+                download_url = self.base_url + source_filename
                 target_path = os.path.join(target_dir, filename)
                 urllib.request.urlretrieve(download_url, target_path, reporthook=self._internal_reporthook)
+                if source_filename != filename:
+                    utils.remove_bouquet_and_registration(target_dir, source_filename)
 
             self._safe_call_progress(total_bouquets, total_bouquets, "Aktualizowanie bouquets.tv...")
             
@@ -348,7 +398,7 @@ class IptvBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
 
             existing_services = {line.strip() for line in existing_lines if 'FROM BOUQUET' in line}
             
-            for filename in self.selected_bouquets:
+            for filename in filenames:
                 bouquet_line = f'#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "{filename}" ORDER BY bouquet'
                 if bouquet_line not in existing_services:
                     existing_lines.append(bouquet_line + "\n")
@@ -405,12 +455,13 @@ class PrivateBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
         bouquets_tv_path = os.path.join(target_dir, "bouquets.tv")
         final_message = ""
         try:
-            filenames = [utils.validate_bouquet_filename(name) for name in self.selected_bouquets]
-            for index, filename in enumerate(filenames):
+            source_filenames = [utils.validate_bouquet_filename(name) for name in self.selected_bouquets]
+            filenames = [utils.panel_bouquet_filename(name) for name in source_filenames]
+            for index, (source_filename, filename) in enumerate(zip(source_filenames, filenames)):
                 if self._is_cancelled:
                     raise InterruptedError("Installation cancelled")
-                self._safe_call_progress(index, len(filenames), "Pobieranie: %s" % filename)
-                query = urllib.parse.urlencode({"name": filename})
+                self._safe_call_progress(index, len(filenames), "Pobieranie: %s" % source_filename)
+                query = urllib.parse.urlencode({"name": source_filename})
                 with urllib.request.urlopen(constants.BOUQUET_URL_API + "?" + query, timeout=20) as response:
                     access = json.loads(response.read().decode("utf-8"))
                 download_url = access.get("url")
@@ -418,6 +469,8 @@ class PrivateBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
                     raise ValueError("Serwer nie udostępnił wybranego bukietu.")
                 target_path = os.path.join(target_dir, filename)
                 urllib.request.urlretrieve(download_url, target_path, reporthook=self._internal_reporthook)
+                if source_filename != filename:
+                    utils.remove_bouquet_and_registration(target_dir, source_filename)
 
             self._safe_call_progress(len(filenames), len(filenames), "Aktualizowanie bouquets.tv...")
             existing_lines = []
@@ -458,7 +511,7 @@ class IptvBouquetUninstallWorker(ProgressWorkerMixin, BaseWorker):
         bouquets_tv_path = os.path.join(target_dir, "bouquets.tv")
         
         try:
-            self.selected_bouquets = [utils.validate_bouquet_filename(name) for name in self.selected_bouquets]
+            self.selected_bouquets = [utils.panel_bouquet_filename(name) for name in self.selected_bouquets]
             total_bouquets = len(self.selected_bouquets)
             for i, filename in enumerate(self.selected_bouquets):
                 if self._is_cancelled: raise InterruptedError("Uninstallation cancelled")
@@ -562,6 +615,7 @@ class MyRadioOnlineBouquetWorker(BaseWorker):
             if not count:
                 raise ValueError("Nie znaleziono dostępnych stacji radiowych.")
             utils.atomic_write_lines(bouquet_path, lines)
+            utils.remove_bouquet_and_registration("/etc/enigma2", "userbouquet.azman_iptv_myradioonline.tv")
             service_line = '#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet' % constants.MYRADIOONLINE_BOUQUET_FILENAME
             existing = []
             if os.path.exists(bouquets_tv_path):
@@ -601,6 +655,7 @@ class PolskieRadioBouquetWorker(BaseWorker):
                 lines.append("#SERVICE %s:%s:%s\n" % (service_prefix, encoded_url, safe_name))
                 lines.append("#DESCRIPTION %s\n" % safe_name)
             utils.atomic_write_lines(bouquet_path, lines)
+            utils.remove_bouquet_and_registration("/etc/enigma2", "userbouquet.azman_iptv_polskieradio.tv")
             service_line = '#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet' % bouquet_name
             existing = []
             if os.path.exists(bouquets_tv_path):
@@ -636,6 +691,8 @@ class _RadioApiBouquetWorker(BaseWorker):
         if not stations:
             raise ValueError("Nie znaleziono dostępnych stacji radiowych.")
         utils.atomic_write_lines(path, lines)
+        legacy_filename = filename.replace("userbouquet.azmanpanel_", "userbouquet.azman_iptv_", 1)
+        utils.remove_bouquet_and_registration("/etc/enigma2", legacy_filename)
         bouquets = "/etc/enigma2/bouquets.tv"
         existing = open(bouquets, "r").readlines() if os.path.exists(bouquets) else []
         marker = '#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet\n' % filename
@@ -704,7 +761,7 @@ class IptvOrgWorker(BaseWorker):
 
     def run(self):
         m3u_url = "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/pl.m3u"
-        bouquet_filename = "userbouquet.iptv-org-pl.tv"
+        bouquet_filename = constants.IPTVORG_BOUQUET_FILENAME
         bouquet_filepath = os.path.join("/etc/enigma2", bouquet_filename)
         bouquets_tv_path = "/etc/enigma2/bouquets.tv"
         
@@ -751,6 +808,7 @@ class IptvOrgWorker(BaseWorker):
                 raise ValueError("Nie znaleziono żadnych kanałów w pobranej liście M3U.")
             
             utils.atomic_write_lines(bouquet_filepath, bouquet_lines)
+            utils.remove_bouquet_and_registration("/etc/enigma2", "userbouquet.iptv-org-pl.tv")
                 
             service_line_to_add = f'#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "{bouquet_filename}" ORDER BY bouquet'
             main_bouquet_lines = []

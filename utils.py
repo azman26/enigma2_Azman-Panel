@@ -18,6 +18,18 @@ def validate_bouquet_filename(filename):
         raise ValueError(f"Nieprawidłowa nazwa bukietu: {filename!r}")
     return filename
 
+def panel_bouquet_filename(filename):
+    filename = validate_bouquet_filename(filename)
+    name = filename[len("userbouquet."):-len(".tv")]
+    for prefix in ("azmanpanel_", "azmanplayer_", "azman_iptv_", "iptv_"):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+            break
+    if name == "iptv-org-pl":
+        name = "iptvorg_pl"
+    name = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "lista"
+    return "userbouquet.azmanpanel_%s.tv" % name
+
 def atomic_write_lines(path, lines, encoding="utf-8"):
     """Zapisuje plik przez plik tymczasowy, aby uniknąć pustej konfiguracji."""
     directory = os.path.dirname(path) or "."
@@ -34,6 +46,20 @@ def atomic_write_lines(path, lines, encoding="utf-8"):
         except OSError:
             pass
         raise
+
+def remove_bouquet_and_registration(directory, filename):
+    path = os.path.join(directory, filename)
+    if os.path.exists(path):
+        os.remove(path)
+    registry_path = os.path.join(directory, "bouquets.tv")
+    if not os.path.exists(registry_path):
+        return
+    with open(registry_path, "r") as handle:
+        lines = handle.readlines()
+    marker = 'FROM BOUQUET "%s"' % filename
+    retained = [line for line in lines if marker not in line]
+    if len(retained) != len(lines):
+        atomic_write_lines(registry_path, retained)
 
 def log_error(exception, context_info="Unknown", **kwargs):
     

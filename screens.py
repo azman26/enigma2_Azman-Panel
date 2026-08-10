@@ -12,13 +12,14 @@ from Components.ScrollLabel import ScrollLabel
 from Components.ProgressBar import ProgressBar
 from Screens.Screen import Screen
 from Screens.MessageBox import MessageBox
+from Screens.ChoiceBox import ChoiceBox
 from Screens.Standby import TryQuitMainloop
 from Tools.LoadPixmap import LoadPixmap
 from skin import loadSkin
 from enigma import eTimer, eConsoleAppContainer
 
 from . import constants, utils
-from .workers import PiconZipListWorker, PiconInstallationWorker, PrivateBouquetListWorker, PrivateBouquetInstallWorker, IptvBouquetUninstallWorker, IptvOrgWorker, MyRadioOnlineBouquetWorker, PolskieRadioBouquetWorker, RmfonBouquetWorker, EurozetBouquetWorker, PackageListWorker, ManifestPackageDownloadWorker
+from .workers import PiconZipListWorker, PiconInstallationWorker, PrivateBouquetListWorker, PrivateBouquetInstallWorker, IptvBouquetUninstallWorker, IptvOrgWorker, MyRadioOnlineBouquetWorker, PolskieRadioBouquetWorker, RmfonBouquetWorker, EurozetBouquetWorker, PackageListWorker, ManifestPackageDownloadWorker, SatellitesXmlUpdateWorker
 from .config import config, save_config
 
 PLUGIN_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -157,7 +158,8 @@ class PackageTileSelectionScreen(Screen):
         if len(label) > 27:
             label = label[:26] + "…"
         if self.is_bouquet_list:
-            status = "\n%s" % ("Zainstalowany" if os.path.exists(os.path.join("/etc/enigma2", value)) else "Nowy")
+            target_filename = utils.panel_bouquet_filename(value)
+            status = "\n%s" % ("Zainstalowany" if os.path.exists(os.path.join("/etc/enigma2", target_filename)) else "Nowy")
         else:
             status = ""
         return "%s  %s%s" % (checked, label, status)
@@ -165,7 +167,15 @@ class PackageTileSelectionScreen(Screen):
     def _tile_icon(self, value):
         if self.is_bouquet_list:
             name = re.sub(r"^userbouquet\.|\.tv$", "", value, flags=re.IGNORECASE)
-            icon_name = "icon_bouquet_%s.png" % re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+            normalized_name = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+            bouquet_icons = (
+                ("regionalne", "icon_bouquet_regionalne_yt_radio.png"),
+                ("okru", "icon_bouquet_iptv_okru_vk_azman.png"),
+                ("endriu", "icon_bouquet_kamery_internetowe_pl_endriu.png"),
+                ("toya", "icon_bouquet_kamery_toya_rysiek_52.png"),
+                ("zet71", "icon_bouquet_polskie_stacje_radiowe_zet71.png"),
+            )
+            icon_name = next((candidate for key, candidate in bouquet_icons if key in normalized_name), "icon_bouquet_%s.png" % normalized_name)
         else:
             filename = urllib.parse.unquote(value).lower()
             mapping = (
@@ -546,6 +556,7 @@ class AzmanPanelMainScreen(Screen):
             ("AjPanel", self.start_ajpanel_install, "icon_ajpanel.png", "Zewn\u0119trzne narz\u0119dzie administracyjne i konfiguracyjne dla Enigma2."),
             ("M3UIPTV", self.start_m3uiptv_install, "icon_m3uiptv.png", "Konwertuje listy M3U do bukiet\u00f3w kana\u0142\u00f3w Enigma2."),
             ("Airly", self.start_airly_install, "icon_airly.png", "Monitoring jako\u015bci powietrza w Polsce i na \u015bwiecie."),
+            ("Aktualizacja satellites.xml", self.start_satellites_xml_update, "icon_satellitesxml.png", "Pobiera aktualny satellites.xml z OE-Alliance lub OpenPLi i tworzy kopię pliku przed zapisem."),
         ]
         
         coming_soon_names = (
@@ -577,7 +588,7 @@ class AzmanPanelMainScreen(Screen):
         channel_names = ("Bukiety IPTV PL", "Bukiety FAST", "IPTV.ORG", "MyRadioOnline", "Polskie Radio", "RMF ON", "Eurozet")
         if text in channel_names:
             return "Bukiety/Listy kanałów"
-        tool_names = ("Archiv CZSK", "AjPanel", "Dodatki do E2K", "M3UIPTV", "Airly")
+        tool_names = ("Archiv CZSK", "AjPanel", "Dodatki do E2K", "M3UIPTV", "Airly", "Aktualizacja satellites.xml")
         if text in tool_names:
             return "Narzędzia/Inne wtyczki"
         plugin_names = ("Azman Player", "Stacja Meteo MMz", "IMGW Meteo", "Shelly Control", "Karcher Radio Control", "MiHome Control", "YT Playlist Player", "Monitor Burz", "Kalendarz Ogrodnika")
@@ -607,7 +618,7 @@ class AzmanPanelMainScreen(Screen):
             order_map = {name: index for index, name in enumerate(order)}
             self.menu_items.sort(key=lambda item: order_map.get(item["text"], len(order_map)))
         elif selected_tab == "Narzędzia/Inne wtyczki":
-            order = ("AjPanel", "M3UIPTV", "Dodatki do E2K", "Archiv CZSK", "Airly")
+            order = ("AjPanel", "M3UIPTV", "Dodatki do E2K", "Archiv CZSK", "Airly", "Aktualizacja satellites.xml")
             order_map = {name: index for index, name in enumerate(order)}
             self.menu_items.sort(key=lambda item: order_map.get(item["text"], len(order_map)))
         if selected_tab == "Info":
@@ -902,6 +913,67 @@ class AzmanPanelMainScreen(Screen):
             self._open_picon_selection_screen()
         self.session.openWithCallback(after_messagebox_callback, MessageBox, f"Zakończono instalację picon.\n\n{final_message}", type=MessageBox.TYPE_INFO)
 
+    def start_satellites_xml_update(self):
+        choices = [(label, (label, url)) for _key, label, url in constants.SATELLITES_XML_SOURCES]
+        self.session.openWithCallback(
+            self._select_satellites_xml_source,
+            ChoiceBox,
+            title="Wybierz źródło satellites.xml",
+            list=choices,
+        )
+
+    def _select_satellites_xml_source(self, choice):
+        if not choice:
+            return
+        source_name, source_url = choice[1]
+        choices = (
+            ("/etc/tuxbox/satellites.xml", ["/etc/tuxbox/satellites.xml"]),
+            ("/etc/enigma2/satellites.xml", ["/etc/enigma2/satellites.xml"]),
+            ("Obie lokalizacje", ["/etc/tuxbox/satellites.xml", "/etc/enigma2/satellites.xml"]),
+        )
+        self.session.openWithCallback(
+            lambda target: self._select_satellites_xml_target(source_name, source_url, target),
+            ChoiceBox,
+            title="Wybierz lokalizację zapisu",
+            list=choices,
+        )
+
+    def _select_satellites_xml_target(self, source_name, source_url, choice):
+        if not choice:
+            return
+        target_paths = choice[1]
+        message = (
+            "Pobrać satellites.xml ze źródła %s?\n\n"
+            "Przed zapisem zostanie wykonana kopia istniejącego pliku.\n"
+            "Plik XML zostanie sprawdzony przed zapisem."
+        ) % source_name
+        self.session.openWithCallback(
+            lambda confirmed: confirmed and self._start_satellites_xml_update(source_name, source_url, target_paths),
+            MessageBox,
+            message,
+            MessageBox.TYPE_YESNO,
+            default=True,
+        )
+
+    def _start_satellites_xml_update(self, source_name, source_url, target_paths):
+        self.progress_screen = self.session.open(DownloadProgressScreen, title="Aktualizacja satellites.xml...")
+        self.current_worker = SatellitesXmlUpdateWorker(source_name, source_url, target_paths, self._on_satellites_xml_update_finished)
+        self.progress_screen.parent_worker = self.current_worker
+        self.current_worker.start()
+
+    def _on_satellites_xml_update_finished(self, error_message, final_message):
+        self.current_worker = None
+        if getattr(self, "progress_screen", None):
+            self.progress_screen.close()
+        self._defer_action(lambda: self._show_satellites_xml_update_result(error_message, final_message))
+
+    def _show_satellites_xml_update_result(self, error_message, final_message):
+        self.session.open(
+            MessageBox,
+            error_message or final_message or "Operacja zakończona.",
+            MessageBox.TYPE_ERROR if error_message else MessageBox.TYPE_INFO,
+        )
+
     def start_myradioonline_bouquet(self):
         self.session.openWithCallback(
             self._confirm_myradioonline_bouquet,
@@ -984,7 +1056,7 @@ class AzmanPanelMainScreen(Screen):
         if error_message or not bouquet_filenames:
             self.session.open(MessageBox, error_message or "Nie znaleziono bukietów na serwerze.", MessageBox.TYPE_ERROR)
             return
-        item_list = [(fn, fn.replace("userbouquet.", "").replace(".tv", "").replace("_", " ").title()) for fn in bouquet_filenames]
+        item_list = [(fn, utils.panel_bouquet_filename(fn).replace("userbouquet.azmanpanel_", "").replace(".tv", "").replace("_", " ").title()) for fn in bouquet_filenames]
         def open_select_list_screen():
             self.session.open(
                 PackageTileSelectionScreen,

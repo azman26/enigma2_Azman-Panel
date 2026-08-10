@@ -5,8 +5,8 @@
 
 
 PLUGIN_NAME = "Azman Panel"
-PLUGIN_VERSION = "2026.08.10-1643"
-PLUGIN_BUILD = "azman-panel-2026.08.10-1643"
+PLUGIN_VERSION = "2026.08.10-2024"
+PLUGIN_BUILD = "azman-panel-2026.08.10-2024"
 
 
 FEED_CONF_URL = "https://raw.githubusercontent.com/azman26/azman-enigma2-repo/main/azman-feed.conf"
@@ -25,10 +25,15 @@ MYRADIOONLINE_API_URL = (
     "https://myradioonline.pl/radio-api/get-radios-v2/app-auth/andr1439/"
     "9dcc7a63f7426ed590982a7ddfa5b56ad820818df50550428bdfa4db3fbbe498299231aedde1577c3ef6b43b7a66243eb5df62864e439e329a0dc2d712e43d29"
 )
-MYRADIOONLINE_BOUQUET_FILENAME = "userbouquet.azman_iptv_myradioonline.tv"
-POLSKIE_RADIO_BOUQUET_FILENAME = "userbouquet.azman_iptv_polskieradio.tv"
-RMFON_BOUQUET_FILENAME = "userbouquet.azman_iptv_rmfon.tv"
-EUROZET_BOUQUET_FILENAME = "userbouquet.azman_iptv_eurozet.tv"
+MYRADIOONLINE_BOUQUET_FILENAME = "userbouquet.azmanpanel_myradioonline.tv"
+POLSKIE_RADIO_BOUQUET_FILENAME = "userbouquet.azmanpanel_polskieradio.tv"
+RMFON_BOUQUET_FILENAME = "userbouquet.azmanpanel_rmfon.tv"
+EUROZET_BOUQUET_FILENAME = "userbouquet.azmanpanel_eurozet.tv"
+IPTVORG_BOUQUET_FILENAME = "userbouquet.azmanpanel_iptvorg_pl.tv"
+SATELLITES_XML_SOURCES = (
+    ("oe_alliance", "OE-Alliance", "https://raw.githubusercontent.com/oe-alliance/oe-alliance-tuxbox-common/refs/heads/master/src/satellites.xml"),
+    ("openpli", "OpenPLi", "https://raw.githubusercontent.com/OpenPLi/tuxbox-xml/master/xml/satellites.xml"),
+)
 RMFON_API_URL = "https://api.rmfon.pl/"
 EUROZET_API_URL = "https://player.chillizet.pl/api/"
 EUROZET_STATIONS = (("radiozet", "Radio ZET"), ("antyradio", "ANTYRADIO"), ("meloradio", "Meloradio"), ("chillizet", "Chillizet"))
