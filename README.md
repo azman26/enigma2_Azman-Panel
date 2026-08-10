@@ -12,6 +12,8 @@ Najprostsza instalacja przez SSH — pobierze i zainstaluje najnowszą wersję A
 wget -q --no-check-certificate https://raw.githubusercontent.com/azman26/enigma2_Azman-Panel/main/installer.sh -O - | /bin/sh
 ```
 
+Alternatywnie możesz pobrać plik IPK ręcznie z sekcji Releases i zainstalować go poleceniem:
+
 Po zakończeniu instalacji uruchom ponownie interfejs Enigma2:
 
 ```sh
