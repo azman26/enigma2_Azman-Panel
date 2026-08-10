@@ -1,5 +1,5 @@
-# /usr/lib/enigma2/python/Plugins/Extensions/AzmanPanel/workers.py
-# KOD Z OSTATECZNĄ POPRAWKĄ KODOWANIA URL DLA IPTV.ORG
+
+
 
 import threading
 import urllib.request
@@ -18,7 +18,7 @@ from . import constants, utils, runtime
 from .epg_mapper import PanelEpgMapper
 
 class BaseWorker(threading.Thread):
-    # ... (bez zmian) ...
+    
     def __init__(self, callback_finished):
         threading.Thread.__init__(self)
         self._is_cancelled = False
@@ -60,7 +60,7 @@ class ProgressWorkerMixin:
             self.callback_progress(*self._progress_args)
 
 class PackageListWorker(BaseWorker):
-    # ... (bez zmian) ...
+    
     def __init__(self, callback_finished):
         super(PackageListWorker, self).__init__(callback_finished)
         self.error_message = None
@@ -98,8 +98,8 @@ class PackageListWorker(BaseWorker):
         try:
             packages_content = None
             packages_gz_url = None
-            # Warianty środowiskowe są opcjonalne. Zachowujemy fallback do
-            # istniejącego feeda all, aby starsze instalacje nadal działały.
+            
+            
             for tag in runtime.package_runtime_tags():
                 candidate_url = f"{constants.AZMAN_FEED_BASE_URL}/{tag}/Packages.gz"
                 try:
@@ -203,7 +203,7 @@ class ManifestPackageDownloadWorker(BaseWorker):
             self._safe_call_main_thread(self.error_message, self.package_path)
 
 class PiconZipListWorker(BaseWorker):
-    # ... (bez zmian) ...
+    
     def __init__(self, callback_finished):
         super(PiconZipListWorker, self).__init__(callback_finished)
         self.error_message = None
@@ -223,7 +223,7 @@ class PiconZipListWorker(BaseWorker):
             self._safe_call_main_thread(self.error_message, self.picon_zip_filenames)
 
 class PiconInstallationWorker(ProgressWorkerMixin, BaseWorker):
-    # ... (bez zmian) ...
+    
     def __init__(self, selected_zips, target_dir, callback_progress, callback_finished):
         super(PiconInstallationWorker, self).__init__(callback_finished)
         self.selected_zips = selected_zips
@@ -290,7 +290,7 @@ class PiconInstallationWorker(ProgressWorkerMixin, BaseWorker):
             self._safe_call_main_thread(final_message)
             
 class IptvBouquetListWorker(BaseWorker):
-    # ... (bez zmian) ...
+    
     def __init__(self, list_url, callback_finished):
         super(IptvBouquetListWorker, self).__init__(callback_finished)
         self.list_url = list_url
@@ -312,7 +312,7 @@ class IptvBouquetListWorker(BaseWorker):
             self._safe_call_main_thread(self.error_message, self.bouquet_filenames)
 
 class IptvBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
-    # ... (bez zmian) ...
+    
     def __init__(self, selected_bouquets, base_url, callback_progress, callback_finished):
         super(IptvBouquetInstallWorker, self).__init__(callback_finished)
         self.selected_bouquets = selected_bouquets
@@ -370,8 +370,82 @@ class IptvBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
         finally:
             self._safe_call_main_thread(final_message)
 
+class PrivateBouquetListWorker(BaseWorker):
+    def __init__(self, callback_finished):
+        super(PrivateBouquetListWorker, self).__init__(callback_finished)
+
+    def run(self):
+        error_message = None
+        bouquet_filenames = []
+        try:
+            with urllib.request.urlopen(constants.BOUQUETS_LIST_API, timeout=15) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            bouquet_filenames = sorted(
+                [item.get("name") for item in payload.get("packages", []) if item.get("name")],
+                key=lambda name: name.lower()
+            )
+            bouquet_filenames = [utils.validate_bouquet_filename(name) for name in bouquet_filenames]
+            if not bouquet_filenames:
+                error_message = "Nie znaleziono dostępnych bukietów IPTV PL."
+        except Exception as error:
+            utils.log_error(error, self.__class__.__name__, url=constants.BOUQUETS_LIST_API)
+            error_message = "Nie udało się pobrać listy bukietów IPTV PL."
+        finally:
+            self._safe_call_main_thread(error_message, bouquet_filenames)
+
+class PrivateBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
+    def __init__(self, selected_bouquets, callback_progress, callback_finished):
+        super(PrivateBouquetInstallWorker, self).__init__(callback_finished)
+        self.selected_bouquets = selected_bouquets
+        self.callback_progress = callback_progress
+        self._init_progress()
+
+    def run(self):
+        target_dir = "/etc/enigma2"
+        bouquets_tv_path = os.path.join(target_dir, "bouquets.tv")
+        final_message = ""
+        try:
+            filenames = [utils.validate_bouquet_filename(name) for name in self.selected_bouquets]
+            for index, filename in enumerate(filenames):
+                if self._is_cancelled:
+                    raise InterruptedError("Installation cancelled")
+                self._safe_call_progress(index, len(filenames), "Pobieranie: %s" % filename)
+                query = urllib.parse.urlencode({"name": filename})
+                with urllib.request.urlopen(constants.BOUQUET_URL_API + "?" + query, timeout=20) as response:
+                    access = json.loads(response.read().decode("utf-8"))
+                download_url = access.get("url")
+                if not download_url:
+                    raise ValueError("Serwer nie udostępnił wybranego bukietu.")
+                target_path = os.path.join(target_dir, filename)
+                urllib.request.urlretrieve(download_url, target_path, reporthook=self._internal_reporthook)
+
+            self._safe_call_progress(len(filenames), len(filenames), "Aktualizowanie bouquets.tv...")
+            existing_lines = []
+            if os.path.exists(bouquets_tv_path):
+                with open(bouquets_tv_path, "r") as handle:
+                    existing_lines = handle.readlines()
+            existing_services = {line.strip() for line in existing_lines if "FROM BOUQUET" in line}
+            for filename in filenames:
+                service_line = '#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet' % filename
+                if service_line not in existing_services:
+                    existing_lines.append(service_line + "\n")
+            utils.atomic_write_lines(bouquets_tv_path, existing_lines)
+
+            self._safe_call_progress(len(filenames), len(filenames), "Przeładowywanie listy kanałów...")
+            database = eDVBDB.getInstance()
+            database.reloadBouquets()
+            database.reloadServicelist()
+            final_message = "Zainstalowano %d bukiet(ów). Lista kanałów została przeładowana." % len(filenames)
+        except InterruptedError:
+            final_message = "Instalacja anulowana przez użytkownika."
+        except Exception as error:
+            utils.log_error(error, self.__class__.__name__, selected_bouquets=self.selected_bouquets)
+            final_message = "Wystąpił błąd podczas instalacji: %s" % error
+        finally:
+            self._safe_call_main_thread(final_message)
+
 class IptvBouquetUninstallWorker(ProgressWorkerMixin, BaseWorker):
-    # ... (bez zmian) ...
+    
     def __init__(self, selected_bouquets, callback_progress, callback_finished):
         super(IptvBouquetUninstallWorker, self).__init__(callback_finished)
         self.selected_bouquets = selected_bouquets
@@ -422,33 +496,6 @@ class IptvBouquetUninstallWorker(ProgressWorkerMixin, BaseWorker):
         finally:
             self._safe_call_main_thread(final_message)
 
-class SourcesXmlDownloadWorker(BaseWorker):
-    # ... (bez zmian) ...
-    def __init__(self, callback_finished):
-        super(SourcesXmlDownloadWorker, self).__init__(callback_finished)
-        self.error_message = None
-        self.final_message = None
-
-    def run(self):
-        target_path = os.path.join(constants.SOURCES_XML_TARGET_DIR, constants.SOURCES_XML_FILENAME)
-        filename = constants.SOURCES_XML_FILENAME
-        try:
-            if self._is_cancelled: return
-            
-            if not os.path.exists(constants.SOURCES_XML_TARGET_DIR):
-                os.makedirs(constants.SOURCES_XML_TARGET_DIR, exist_ok=True)
-            
-            urllib.request.urlretrieve(constants.SOURCES_XML_URL, target_path, reporthook=self._internal_reporthook)
-            
-            self.final_message = f"Plik '{filename}' pomyślnie zainstalowany."
-        except InterruptedError:
-            self.error_message = "Pobieranie anulowane przez użytkownika."
-        except Exception as e:
-            utils.log_error(e, self.__class__.__name__, url=constants.SOURCES_XML_URL, target=target_path)
-            self.error_message = f"Błąd pobierania pliku {filename}."
-        finally:
-            if not self._is_cancelled:
-                self._safe_call_main_thread(self.error_message, self.final_message)
 
 class MyRadioOnlineBouquetWorker(BaseWorker):
     """Pobiera publiczny katalog MyRadioOnline i tworzy bukiet radiowy."""
@@ -683,16 +730,16 @@ class IptvOrgWorker(BaseWorker):
                         stream_url = lines[i+1].strip()
                         
                         if channel_name and stream_url:
-                            # <<< POCZĄTEK MODYFIKACJI ---
+                            
                             cleaned_name = channel_name.replace(':', ' ')
                             
-                            # POPRAWKA: URL musi być w pełni zakodowany, aby : zmienił się na %3a
-                            # Używamy quote bez żadnych bezpiecznych znaków.
+                            
+                            
                             encoded_url = urllib.parse.quote(stream_url)
                             
-                            # POPRAWKA: Wracamy do typu serwisu 4097, który jest bardziej standardowy dla tego formatu
+                            
                             bouquet_lines.append(f"#SERVICE 4097:0:1:0:0:0:0:0:0:0:{encoded_url}:{cleaned_name}\n")
-                            # <<< KONIEC MODYFIKACJI ---
+                            
                             bouquet_lines.append(f"#DESCRIPTION {cleaned_name}\n")
                             channel_count += 1
                     except IndexError:

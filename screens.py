@@ -1,4 +1,5 @@
 import os
+import re
 import urllib.parse
 import subprocess
 import shlex
@@ -17,7 +18,7 @@ from skin import loadSkin
 from enigma import eTimer, eConsoleAppContainer
 
 from . import constants, utils
-from .workers import PiconZipListWorker, PiconInstallationWorker, SourcesXmlDownloadWorker, IptvBouquetListWorker, IptvBouquetInstallWorker, IptvBouquetUninstallWorker, IptvOrgWorker, MyRadioOnlineBouquetWorker, PolskieRadioBouquetWorker, RmfonBouquetWorker, EurozetBouquetWorker, PackageListWorker, ManifestPackageDownloadWorker
+from .workers import PiconZipListWorker, PiconInstallationWorker, PrivateBouquetListWorker, PrivateBouquetInstallWorker, IptvBouquetUninstallWorker, IptvOrgWorker, MyRadioOnlineBouquetWorker, PolskieRadioBouquetWorker, RmfonBouquetWorker, EurozetBouquetWorker, PackageListWorker, ManifestPackageDownloadWorker
 from .config import config, save_config
 
 PLUGIN_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -31,10 +32,12 @@ class AzmanSelectListScreen(Screen):
         self.selected_items = []
         self.on_install_callback = on_install_callback
         self.on_uninstall_callback = on_uninstall_callback
+        self.is_bouquet_list = bool(item_list and str(item_list[0][0]).startswith("userbouquet."))
         
         self["title"] = StaticText(title)
-        self["key_green"] = StaticText("Zainstaluj zaznaczone")
-        self["key_red"] = StaticText("Odinstaluj zaznaczone")
+        self["selection_info"] = StaticText("")
+        self["key_green"] = StaticText("Zainstaluj (0)")
+        self["key_red"] = StaticText("Odinstaluj" if on_uninstall_callback else "Anuluj")
         self["key_yellow"] = StaticText("Zaznacz/Odznacz wszystko")
         self["list"] = MenuList([])
         
@@ -52,7 +55,24 @@ class AzmanSelectListScreen(Screen):
         self.onLayoutFinish.append(self.build_list)
 
     def build_list(self):
-        self["list"].setList([(f"[{'x' if item[0] in self.selected_items else ' '}] {item[1]}", item[0]) for item in self.item_list])
+        current = self["list"].getCurrent()
+        current_value = current[1] if current else None
+        entries = []
+        for value, label in self.item_list:
+            checked = "☑" if value in self.selected_items else "☐"
+            if self.is_bouquet_list:
+                status = "  • ZAINSTALOWANY" if os.path.exists(os.path.join("/etc/enigma2", value)) else "  • NOWY"
+            else:
+                status = "  • PACZKA ZIP"
+            entries.append((f"{checked}  {label}{status}", value))
+        self["list"].setList(entries)
+        self["selection_info"].setText("Zaznaczono: %d z %d   |   OK - zaznacz/odznacz" % (len(self.selected_items), len(self.item_list)))
+        self["key_green"].setText("Zainstaluj (%d)" % len(self.selected_items))
+        if current_value:
+            for index, entry in enumerate(entries):
+                if entry[1] == current_value:
+                    self["list"].moveToIndex(index)
+                    break
 
     def toggle_selection(self):
         current = self["list"].getCurrent()
@@ -80,9 +100,149 @@ class AzmanSelectListScreen(Screen):
             selected = list(self.selected_items)
             self.close()
             self.on_uninstall_callback(selected)
+        elif not self.on_uninstall_callback:
+            self.close([])
 
     def keyCancel(self):
         self.close([])
+
+class PackageTileSelectionScreen(Screen):
+    GRID_COLS = 3
+    GRID_ROWS = 3
+    PAGE_SIZE = GRID_COLS * GRID_ROWS
+
+    def __init__(self, session, item_list, target_info, on_install_callback, title="Wybierz paczki Piconów", icon_name="icon_picons.png", on_uninstall_callback=None):
+        Screen.__init__(self, session)
+        self.item_list = item_list
+        self.target_info = target_info
+        self.on_install_callback = on_install_callback
+        self.on_uninstall_callback = on_uninstall_callback
+        self.is_bouquet_list = bool(item_list and str(item_list[0][0]).startswith("userbouquet."))
+        self.selected_items = []
+        self.selected_index = 0
+        self.marker_pixmap = LoadPixmap(f"{PLUGIN_PATH}/icons/marker-cyan.png")
+        self.default_icon_name = icon_name
+        self["title"] = StaticText("Azman Panel  -  %s" % title)
+        self["selection_info"] = StaticText("")
+        self["target_info"] = StaticText(target_info)
+        self["key_red"] = StaticText("Odinstaluj" if on_uninstall_callback else "Anuluj")
+        self["key_green"] = StaticText("Zaznacz/Odznacz")
+        self["key_yellow"] = StaticText("Zaznacz/Odznacz wszystko")
+        for index in range(self.PAGE_SIZE):
+            self["marker_%d" % index] = Pixmap()
+            self["icon_%d" % index] = Pixmap()
+            self["tile_%d" % index] = Label("")
+        self["actions"] = ActionMap(
+            ["OkCancelActions", "DirectionActions", "ColorActions"],
+            {
+                "cancel": self.close,
+                "red": self.uninstall_selected,
+                "ok": self.install_selected,
+                "green": self.toggle_selected,
+                "yellow": self.toggle_all,
+                "up": lambda: self.move(-self.GRID_COLS),
+                "down": lambda: self.move(self.GRID_COLS),
+                "left": lambda: self.move(-1),
+                "right": lambda: self.move(1),
+            }, -1
+        )
+        self.onLayoutFinish.append(self.draw)
+
+    def _page_offset(self):
+        return (self.selected_index // self.PAGE_SIZE) * self.PAGE_SIZE
+
+    def _label(self, value, label):
+        checked = "[x]" if value in self.selected_items else "[ ]"
+        label = label.replace("-", " ")
+        if len(label) > 27:
+            label = label[:26] + "…"
+        if self.is_bouquet_list:
+            status = "\n%s" % ("Zainstalowany" if os.path.exists(os.path.join("/etc/enigma2", value)) else "Nowy")
+        else:
+            status = ""
+        return "%s  %s%s" % (checked, label, status)
+
+    def _tile_icon(self, value):
+        if self.is_bouquet_list:
+            name = re.sub(r"^userbouquet\.|\.tv$", "", value, flags=re.IGNORECASE)
+            icon_name = "icon_bouquet_%s.png" % re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+        else:
+            filename = urllib.parse.unquote(value).lower()
+            mapping = (
+                ("iptv muzyczne", "icon_picon_muzyka.png"),
+                ("radio sat", "icon_picon_radio.png"),
+                ("rakuten", "icon_picon_rakuten.png"),
+                ("sweet", "icon_picon_sweettv.png"),
+                ("lg channels", "icon_picon_lgchannels.png"),
+                ("xiaomi", "icon_picon_xiaomi.png"),
+                ("fast", "icon_picon_azman_fast.png"),
+                ("sat", "icon_picon_sat.png"),
+                ("iptv", "icon_picon_iptv_pl.png"),
+            )
+            icon_name = next((candidate for key, candidate in mapping if key in filename), self.default_icon_name)
+        icon_path = os.path.join(PLUGIN_PATH, "icons", icon_name)
+        fallback_path = os.path.join(PLUGIN_PATH, "icons", self.default_icon_name)
+        return LoadPixmap(icon_path if os.path.exists(icon_path) else fallback_path)
+
+    def draw(self):
+        page_offset = self._page_offset()
+        for tile_index in range(self.PAGE_SIZE):
+            item_index = page_offset + tile_index
+            marker = self["marker_%d" % tile_index]
+            icon = self["icon_%d" % tile_index]
+            label = self["tile_%d" % tile_index]
+            marker.hide()
+            if item_index < len(self.item_list):
+                value, text = self.item_list[item_index]
+                icon.instance.setPixmap(self._tile_icon(value))
+                icon.show()
+                label.setText(self._label(value, text))
+                label.show()
+                if item_index == self.selected_index:
+                    marker.instance.setPixmap(self.marker_pixmap)
+                    marker.show()
+            else:
+                icon.hide()
+                label.hide()
+        self["selection_info"].setText("Zaznaczono: %d z %d   |   OK - instaluj" % (len(self.selected_items), len(self.item_list)))
+
+    def move(self, step):
+        if not self.item_list:
+            return
+        self.selected_index = (self.selected_index + step) % len(self.item_list)
+        self.draw()
+
+    def toggle_selected(self):
+        if not self.item_list:
+            return
+        value = self.item_list[self.selected_index][0]
+        if value in self.selected_items:
+            self.selected_items.remove(value)
+        else:
+            self.selected_items.append(value)
+        self.draw()
+
+    def toggle_all(self):
+        all_values = [item[0] for item in self.item_list]
+        self.selected_items = [] if len(self.selected_items) == len(all_values) else all_values
+        self.draw()
+
+    def install_selected(self):
+        if not self.item_list:
+            return
+        selected = list(self.selected_items)
+        if not selected:
+            selected = [self.item_list[self.selected_index][0]]
+        self.close()
+        self.on_install_callback(selected)
+
+    def uninstall_selected(self):
+        if self.on_uninstall_callback and self.selected_items:
+            selected = list(self.selected_items)
+            self.close()
+            self.on_uninstall_callback(selected)
+        elif not self.on_uninstall_callback:
+            self.close()
 
 class OpkgCommandScreen(Screen):
     def __init__(self, session, command, title="", callback=None, restart_gui=False):
@@ -180,6 +340,16 @@ class DownloadProgressScreen(Screen):
             percent = int(current * 100 / total)
             self["progress"].setValue(percent)
             self["progresstext"].setText(f"{percent}%")
+
+class BouquetGenerationScreen(Screen):
+    def __init__(self, session, bouquet_name):
+        Screen.__init__(self, session)
+        self.setTitle("Tworzenie bukietu")
+        self["title"] = StaticText("Tworzenie bukietu: %s" % bouquet_name)
+        self["message"] = StaticText(
+            "Trwa pobieranie stacji, generowanie bukietu i przypisywanie EPG.\n"
+            "Proszę czekać..."
+        )
 
 class PiconPathSelectionScreen(Screen):
     def __init__(self, session):
@@ -294,7 +464,7 @@ class AzmanPanelMainScreen(Screen):
         self.session = session
         self.current_worker = None
         
-        # --- USTAWIENIE SIATKI 4x3 + panel informacji ---
+        
         self.GRID_ROWS, self.GRID_COLS = 3, 4
         self.GRID_WIDGET_COLS = 6
         
@@ -348,39 +518,39 @@ class AzmanPanelMainScreen(Screen):
 
     def prepare_menu(self):
         menu_definitions = [
-            # --- GŁÓWNY ELEMENT EKOSYSTEMU ---
-            ("Azman Player", self.open_azman_player, "icon_azmanplayer.png", "Otwórz główny odtwarzacz i menedżer kanałów Azman."),
-            ("Stacja Meteo MMz", self.start_stacjameteommz_install, "icon_stacjameteommz.png", "Zainstaluj plugin stacji meteorologicznej MMz."),
-            # --- RZĄD 1 (Miejsca 1-6) ---
-            ("Bukiety IPTV PL", self.open_iptv_bouquet_manager, "icon_iptv_pl.png", "Pobierz bukiety polskich kanałów IPTV."),
-            ("Bukiety FAST", self.open_fast_bouquet_manager, "icon_fast.png", "Pobierz bukiety kanałów FAST."),
-            ("MyRadioOnline", self.start_myradioonline_bouquet, "icon_myradioonline.png", "Utwórz bukiet stacji radiowych MyRadioOnline."),
-            ("Polskie Radio", self.start_polskieradio_bouquet, "icon_polskieradio.png", "Utwórz bukiet oficjalnych stacji Polskiego Radia."),
-            ("RMF ON", self.start_rmfon_bouquet, "icon_rmfon.png", "Utwórz bukiet stacji RMF ON."),
-            ("Eurozet", self.start_eurozet_bouquet, "icon_eurozet.png", "Utwórz bukiet stacji Radio ZET, Antyradio, Meloradio i Chillizet."),
             
-            # --- RZĄD 2 (Miejsca 7-12) ---
-            ("Dodatki do E2K", self.open_e2k_addons_manager, "icon_e2k.png", "Dodatki do E2Kodi — wkrótce."),
-            ("Polskie źródła EPG", self.start_epg_download, "icon_epg.png", "Pobierz plik sources dla EPG-Import."),
-            ("IPTV.ORG", self.start_iptv_org_install, "icon_iptvorg.png", "Pobierz i utwórz bukiet kanałów PL z iptv.org."),
-            ("Picons", self.open_picon_manager, "icon_picons.png", "Pobierz picony 220x132 transparent."),
-            ("Karcher Radio Control", lambda: self._start_feed_package_install("Karcher Radio Control", "enigma2-plugin-extensions--azman-karcherradio"), "icon_karcherradiocontrol.png", "Zainstaluj plugin Karcher Radio Control."),
-            ("YT Playlist Player", self.show_work_in_progress, "icon_ytplaylistplayer.png", "Odtwarzacz playlist YouTube."),
-            ("Monitor Burz", self.start_monitoringburz_install, "icon_monitoringburz.png", "Monitoring wyładowań atmosferycznych."),
-            ("Kalendarz Ogrodnika", self.show_work_in_progress, "icon_kalendarzogrod.png", "Kalendarz i narzędzia ogrodnika."),
-            # --- RZĄD 3 (Miejsca 13-18) ---
-            ("IMGW Meteo", self.start_imgwmeteo_install, "icon_imgwmeteo.png", "Zainstaluj plugin pogody IMGW Meteo."),
-            ("Shelly Control", self.show_work_in_progress, "icon_shellycontrolcenter.png", "Ta funkcja jest w budowie."),
-            ("MiHome Control", self.show_work_in_progress, "icon_mihomecontrol.png", "Zarządzanie urządzeniami Xiaomi Smart Home."),
-            ("Archiv CZSK", self.start_archivczsk_install, "icon_archivczsk.png", "Zainstaluj plugin ArchivCZSK."),
-            ("AjPanel", self.start_ajpanel_install, "icon_ajpanel.png", "Zainstaluj AJPanel."),
-            ("M3UIPTV", self.start_m3uiptv_install, "icon_m3uiptv.png", "Zainstaluj plugin M3U to Bouquet Converter."),
-            ("Airly", self.start_airly_install, "icon_airly.png", "Zainstaluj Monitoring jakości powietrza w Polsce i na świecie."),
+            ("Azman Player", lambda: self.show_coming_soon("Azman Player"), "icon_azmanplayer.png", "Odtwarzacz i centrum kana\u0142\u00f3w Azman - telewizja, radio i zarz\u0105dzanie \u017ar\u00f3d\u0142ami w jednym miejscu."),
+            ("Stacja Meteo MMz", self.start_stacjameteommz_install, "icon_stacjameteommz.png", "Szczeg\u00f3\u0142owe dane pogodowe, wiatr, opady, jako\u015b\u0107 powietrza i astronomia.\nKartka z kalendarza: imieniny, \u015bwi\u0119ta, przys\u0142owie, cytat dnia, porady ogrodnicze, wp\u0142yw Ksi\u0119\u017cyca i biorytm."),
+            
+            ("Bukiety IPTV PL", self.open_iptv_bouquet_manager, "icon_iptv_pl.png", "Polskie kana\u0142y IPTV uporz\u0105dkowane w gotowych bukietach Enigma2."),
+            ("Bukiety FAST", lambda: self.show_coming_soon("Bukiety FAST"), "icon_fast.png", "Gotowe bukiety kana\u0142\u00f3w FAST - funkcja zostanie udost\u0119pniona wkr\u00f3tce."),
+            ("MyRadioOnline", self.start_myradioonline_bouquet, "icon_myradioonline.png", "Tworzy bukiet polskich i zagranicznych stacji radiowych MyRadioOnline."),
+            ("Polskie Radio", self.start_polskieradio_bouquet, "icon_polskieradio.png", "Tworzy bukiet stacji Polskiego Radia wraz z kana\u0142ami tematycznymi i regionalnymi."),
+            ("RMF ON", self.start_rmfon_bouquet, "icon_rmfon.png", "Tworzy bukiet stacji radiowych dost\u0119pnych w serwisie RMF ON."),
+            ("Eurozet", self.start_eurozet_bouquet, "icon_eurozet.png", "Tworzy bukiet stacji grupy Eurozet, m.in. Radio ZET, Antyradio i Meloradio."),
+            
+            
+            ("Dodatki do E2K", self.open_e2k_addons_manager, "icon_e2k.png", "Miejsce na dodatki i rozszerzenia dla E2Kodi - wkr\u00f3tce."),
+            ("Polskie \u017ar\u00f3d\u0142a EPG", lambda: self.show_coming_soon("Polskie zrodla EPG"), "icon_epg.png", "Polskie \u017ar\u00f3d\u0142a programu TV dla EPG Import - funkcja zostanie udost\u0119pniona wkr\u00f3tce."),
+            ("IPTV.ORG", self.start_iptv_org_install, "icon_iptvorg.png", "Tworzy aktualny bukiet polskich kana\u0142\u00f3w z publicznej listy IPTV.ORG."),
+            ("Picons", self.open_picon_manager, "icon_picons.png", "Pobieranie i instalacja picon\u00f3w kana\u0142\u00f3w do wybranej lokalizacji na dekoderze."),
+            ("Karcher Radio Control", lambda: self.show_coming_soon("Karcher Radio Control"), "icon_karcherradiocontrol.png", "Sterowanie radiem Karcher, szybki dost\u0119p do jego funkcji oraz odczyt RDS aktualnie granej stacji."),
+            ("YT Playlist Player", self.show_work_in_progress, "icon_ytplaylistplayer.png", "Wygodne odtwarzanie w\u0142asnych playlist YouTube na ekranie Enigma2."),
+            ("Monitor Burz", self.start_monitoringburz_install, "icon_monitoringburz.png", "Bie\u017c\u0105cy podgl\u0105d wy\u0142adowa\u0144 atmosferycznych i aktywno\u015bci burzowej."),
+            ("Kalendarz Ogrodnika", self.show_work_in_progress, "icon_kalendarzogrod.png", "Kalendarz, porady ogrodnicze, fazy Ksi\u0119\u017cyca i informacje pomocne w planowaniu prac."),
+            
+            ("IMGW Meteo", self.start_imgwmeteo_install, "icon_imgwmeteo.png", "Aktualna pogoda IMGW, mapy, prognozy i ostrze\u017cenia dla zapisanych lokalizacji."),
+            ("Shelly Control", self.show_work_in_progress, "icon_shellycontrolcenter.png", "Sterowanie urz\u0105dzeniami Shelly bezpo\u015brednio z dekodera oraz odczyt danych urz\u0105dze\u0144 w czasie rzeczywistym."),
+            ("MiHome Control", self.show_work_in_progress, "icon_mihomecontrol.png", "Obs\u0142uga wybranych urz\u0105dze\u0144 Xiaomi Mi Home. Obecnie odczyt i sterowanie Xiaomi Mi Purifier oraz Mi Box S."),
+            ("Archiv CZSK", self.start_archivczsk_install, "icon_archivczsk.png", "Odtwarzanie tre\u015bci wideo i archiw\u00f3w czesko-s\u0142owackich w Enigma2."),
+            ("AjPanel", self.start_ajpanel_install, "icon_ajpanel.png", "Zewn\u0119trzne narz\u0119dzie administracyjne i konfiguracyjne dla Enigma2."),
+            ("M3UIPTV", self.start_m3uiptv_install, "icon_m3uiptv.png", "Konwertuje listy M3U do bukiet\u00f3w kana\u0142\u00f3w Enigma2."),
+            ("Airly", self.start_airly_install, "icon_airly.png", "Monitoring jako\u015bci powietrza w Polsce i na \u015bwiecie."),
         ]
         
         coming_soon_names = (
-            "Polskie Żródła EPG", "Azman Player", "YT Playlist Player", "Shelly Control",
-            "MiHome Control", "Karcher Radio Control", "Kalendarz Ogrodnika",
+            "Bukiety FAST", "Polskie \u017ar\xf3d\u0142a EPG", "Azman Player", "YT Playlist Player",
+            "Shelly Control", "MiHome Control", "Karcher Radio Control", "Kalendarz Ogrodnika",
         )
         menu_definitions = [
             (text, (lambda name=text: self.show_coming_soon(name)) if text in coming_soon_names else func, icon, description)
@@ -399,9 +569,6 @@ class AzmanPanelMainScreen(Screen):
         self.apply_tab_filter()
         self.draw_page()
 
-    def open_azman_player(self):
-        """Otwiera menedżer feeda z pakietem Azman Player."""
-        self._open_package_manager("Azman Player", filter_keywords=["azmanplayer", "azman-player"])
 
     def get_item_category(self, item):
         text = item["text"]
@@ -432,7 +599,7 @@ class AzmanPanelMainScreen(Screen):
             order_map = {name: index for index, name in enumerate(plugin_order)}
             self.menu_items.sort(key=lambda item: order_map.get(item["text"], len(order_map)))
         elif selected_tab == "EPG/Picony":
-            order = ("Picons", "Polskie źródła EPG")
+            order = ("Picons", "Polskie \u017ar\u00f3d\u0142a EPG")
             order_map = {name: index for index, name in enumerate(order)}
             self.menu_items.sort(key=lambda item: order_map.get(item["text"], len(order_map)))
         elif selected_tab == "Bukiety/Listy kanałów":
@@ -495,8 +662,8 @@ class AzmanPanelMainScreen(Screen):
         self.draw_page()
         
     def draw_page(self):
-        # Zawsze czyścimy pełną siatkę. Dzięki temu kafelki z poprzedniej
-        # zakładki nie pozostają widoczne po przełączeniu filtra.
+        
+        
         for r in range(3):
             for c in range(self.GRID_WIDGET_COLS):
                 item_index = r * self.GRID_COLS + c
@@ -547,8 +714,8 @@ class AzmanPanelMainScreen(Screen):
             return
         item = self.menu_items[item_index]
         coming_soon_names = (
-            "Polskie Żródła EPG", "Azman Player", "YT Playlist Player", "Shelly Control",
-            "MiHome Control", "Karcher Radio Control", "Kalendarz Ogrodnika",
+            "Bukiety FAST", "Polskie \u017ar\xf3d\u0142a EPG", "Azman Player", "YT Playlist Player",
+            "Shelly Control", "MiHome Control", "Karcher Radio Control", "Kalendarz Ogrodnika",
         )
         if item["text"] in coming_soon_names:
             self.show_coming_soon(item["text"])
@@ -556,8 +723,8 @@ class AzmanPanelMainScreen(Screen):
         if self.get_item_category(item) != "Pluginy":
             self.session.open(MessageBox, "Przycisk Instaluj dotyczy pluginów z zakładki Pluginy.", type=MessageBox.TYPE_INFO)
             return
-        # Chronione pakiety są instalowane przez manifest i weryfikację SHA-256,
-        # a nie przez wyszukiwanie w publicznym Packages.gz.
+        
+        
         if item["text"] == "Monitor Burz":
             self.start_monitoringburz_install()
             return
@@ -678,7 +845,13 @@ class AzmanPanelMainScreen(Screen):
             return
         item_list = [(filename, urllib.parse.unquote(filename)) for filename in picon_zip_filenames]
         def open_select_list_screen():
-            self.session.open(AzmanSelectListScreen, "Wybierz paczki picon", item_list, on_install_callback=self.on_picons_selected)
+            self.session.open(
+                PackageTileSelectionScreen,
+                item_list,
+                "Lokalizacja instalacji: %s" % self.picon_target_dir,
+                self.on_picons_selected,
+                icon_name="icon_picon_package.png",
+            )
         
         self.open_timer.stop()
         self.open_timer.callback.clear()
@@ -742,16 +915,10 @@ class AzmanPanelMainScreen(Screen):
     def _confirm_myradioonline_bouquet(self, confirmed):
         if not confirmed:
             return
-        self.progress_screen = self.session.open(DownloadProgressScreen, title="Tworzenie bukietu MyRadioOnline...")
-        self.current_worker = MyRadioOnlineBouquetWorker(self.on_myradioonline_bouquet_finished)
-        self.progress_screen.parent_worker = self.current_worker
-        self.current_worker.start()
+        self._defer_action(lambda: self._start_radio_bouquet("MyRadioOnline", MyRadioOnlineBouquetWorker))
 
     def on_myradioonline_bouquet_finished(self, error_message, final_message):
-        self.current_worker = None
-        if hasattr(self, "progress_screen") and self.progress_screen:
-            self.progress_screen.close()
-        self._defer_action(lambda: self._show_bouquet_result(error_message, final_message))
+        self._on_radio_bouquet_finished(error_message, final_message)
 
     def _show_bouquet_result(self, error_message, final_message):
         self.session.open(MessageBox, error_message or final_message or "Operacja zakończona.", MessageBox.TYPE_ERROR if error_message else MessageBox.TYPE_INFO, timeout=10)
@@ -768,10 +935,7 @@ class AzmanPanelMainScreen(Screen):
     def _confirm_polskieradio_bouquet(self, confirmed):
         if not confirmed:
             return
-        self.progress_screen = self.session.open(DownloadProgressScreen, title="Tworzenie bukietu Polskie Radio...")
-        self.current_worker = PolskieRadioBouquetWorker(self.on_polskieradio_bouquet_finished)
-        self.progress_screen.parent_worker = self.current_worker
-        self.current_worker.start()
+        self._defer_action(lambda: self._start_radio_bouquet("Polskie Radio", PolskieRadioBouquetWorker))
 
     def start_rmfon_bouquet(self):
         self.session.openWithCallback(self._confirm_rmfon_bouquet, MessageBox,
@@ -780,15 +944,10 @@ class AzmanPanelMainScreen(Screen):
 
     def _confirm_rmfon_bouquet(self, confirmed):
         if not confirmed: return
-        self.progress_screen = self.session.open(DownloadProgressScreen, title="Tworzenie bukietu RMF ON...")
-        self.current_worker = RmfonBouquetWorker(self.on_rmfon_bouquet_finished)
-        self.progress_screen.parent_worker = self.current_worker
-        self.current_worker.start()
+        self._defer_action(lambda: self._start_radio_bouquet("RMF ON", RmfonBouquetWorker))
 
     def on_rmfon_bouquet_finished(self, error_message, final_message):
-        self.current_worker = None
-        if hasattr(self, "progress_screen") and self.progress_screen: self.progress_screen.close()
-        self._defer_action(lambda: self._show_bouquet_result(error_message, final_message))
+        self._on_radio_bouquet_finished(error_message, final_message)
 
     def start_eurozet_bouquet(self):
         self.session.openWithCallback(self._confirm_eurozet_bouquet, MessageBox,
@@ -797,24 +956,27 @@ class AzmanPanelMainScreen(Screen):
 
     def _confirm_eurozet_bouquet(self, confirmed):
         if not confirmed: return
-        self.progress_screen = self.session.open(DownloadProgressScreen, title="Tworzenie bukietu Eurozet...")
-        self.current_worker = EurozetBouquetWorker(self.on_eurozet_bouquet_finished)
-        self.progress_screen.parent_worker = self.current_worker
-        self.current_worker.start()
+        self._defer_action(lambda: self._start_radio_bouquet("Eurozet", EurozetBouquetWorker))
 
     def on_eurozet_bouquet_finished(self, error_message, final_message):
-        self.current_worker = None
-        if hasattr(self, "progress_screen") and self.progress_screen: self.progress_screen.close()
-        self._defer_action(lambda: self._show_bouquet_result(error_message, final_message))
+        self._on_radio_bouquet_finished(error_message, final_message)
 
-    def on_polskieradio_bouquet_finished(self, error_message, final_message):
+    def _start_radio_bouquet(self, bouquet_name, worker_class):
+        self.progress_screen = self.session.open(BouquetGenerationScreen, bouquet_name)
+        self.current_worker = worker_class(self._on_radio_bouquet_finished)
+        self.current_worker.start()
+
+    def _on_radio_bouquet_finished(self, error_message, final_message):
         self.current_worker = None
         if hasattr(self, "progress_screen") and self.progress_screen:
             self.progress_screen.close()
         self._defer_action(lambda: self._show_bouquet_result(error_message, final_message))
 
+    def on_polskieradio_bouquet_finished(self, error_message, final_message):
+        self._on_radio_bouquet_finished(error_message, final_message)
+
     def open_iptv_bouquet_manager(self, *args):
-        self.current_worker = IptvBouquetListWorker(constants.IPTV_SETTINGS_LIST_URL, callback_finished=self.on_iptv_bouquet_list_downloaded)
+        self.current_worker = PrivateBouquetListWorker(callback_finished=self.on_iptv_bouquet_list_downloaded)
         self.current_worker.start()
 
     def on_iptv_bouquet_list_downloaded(self, error_message, bouquet_filenames):
@@ -825,11 +987,13 @@ class AzmanPanelMainScreen(Screen):
         item_list = [(fn, fn.replace("userbouquet.", "").replace(".tv", "").replace("_", " ").title()) for fn in bouquet_filenames]
         def open_select_list_screen():
             self.session.open(
-                AzmanSelectListScreen, 
-                "Wybierz bukiety IPTV PL", 
+                PackageTileSelectionScreen,
                 item_list,
-                on_install_callback=self.on_iptv_bouquets_selected_for_install,
-                on_uninstall_callback=self.on_iptv_bouquets_selected_for_uninstall
+                "Bukiety zostaną zapisane w /etc/enigma2 i dodane do bouquets.tv.",
+                self.on_iptv_bouquets_selected_for_install,
+                title="Wybierz bukiety IPTV PL",
+                icon_name="icon_bouquet_package.png",
+                on_uninstall_callback=self.on_iptv_bouquets_selected_for_uninstall,
             )
         
         self.open_timer.stop()
@@ -839,13 +1003,19 @@ class AzmanPanelMainScreen(Screen):
     
     def on_iptv_bouquets_selected_for_install(self, selected_bouquets):
         if not selected_bouquets: return
+        self._defer_action(lambda: self._start_iptv_bouquet_install(selected_bouquets))
+
+    def _start_iptv_bouquet_install(self, selected_bouquets):
         self.progress_screen = self.session.open(DownloadProgressScreen, title="Instalowanie bukietów...")
-        self.current_worker = IptvBouquetInstallWorker(selected_bouquets, constants.IPTV_SETTINGS_BASE_URL, self.progress_screen.setProgress, self.on_iptv_bouquet_installation_finished)
+        self.current_worker = PrivateBouquetInstallWorker(selected_bouquets, self.progress_screen.setProgress, self.on_iptv_bouquet_installation_finished)
         self.progress_screen.parent_worker = self.current_worker
         self.current_worker.start()
 
     def on_iptv_bouquets_selected_for_uninstall(self, selected_bouquets):
         if not selected_bouquets: return
+        self._defer_action(lambda: self._start_iptv_bouquet_uninstall(selected_bouquets))
+
+    def _start_iptv_bouquet_uninstall(self, selected_bouquets):
         self.progress_screen = self.session.open(DownloadProgressScreen, title="Odinstalowywanie bukietów...")
         self.current_worker = IptvBouquetUninstallWorker(selected_bouquets, self.progress_screen.setProgress, self.on_iptv_bouquet_installation_finished)
         self.progress_screen.parent_worker = self.current_worker
@@ -859,68 +1029,13 @@ class AzmanPanelMainScreen(Screen):
             self.open_iptv_bouquet_manager()
         self.session.openWithCallback(after_messagebox_callback, MessageBox, final_message, type=MessageBox.TYPE_INFO)
 
-    def open_fast_bouquet_manager(self, *args):
-        self.current_worker = IptvBouquetListWorker(constants.FAST_SETTINGS_LIST_URL, callback_finished=self.on_fast_bouquet_list_downloaded)
-        self.current_worker.start()
         
-    def on_fast_bouquet_list_downloaded(self, error_message, bouquet_filenames):
-        self.current_worker = None
-        if error_message or not bouquet_filenames:
-            self.session.open(MessageBox, error_message or "Nie znaleziono bukietów FAST na serwerze.", MessageBox.TYPE_ERROR)
-            return
-        item_list = [(fn, fn.replace("userbouquet.", "").replace(".tv", "").replace("_", " ").title()) for fn in bouquet_filenames]
-        def open_select_list_screen():
-            self.session.open(
-                AzmanSelectListScreen, 
-                "Wybierz bukiety FAST", 
-                item_list,
-                on_install_callback=self.on_fast_bouquets_selected_for_install,
-                on_uninstall_callback=self.on_fast_bouquets_selected_for_uninstall
-            )
         
-        self.open_timer.stop()
-        self.open_timer.callback.clear()
-        self.open_timer.callback.append(open_select_list_screen)
-        self.open_timer.start(1, True)
         
-    def on_fast_bouquets_selected_for_install(self, selected_bouquets):
-        if not selected_bouquets: return
-        self.progress_screen = self.session.open(DownloadProgressScreen, title="Instalowanie bukietów FAST...")
-        self.current_worker = IptvBouquetInstallWorker(selected_bouquets, constants.FAST_SETTINGS_BASE_URL, self.progress_screen.setProgress, self.on_fast_bouquet_installation_finished)
-        self.progress_screen.parent_worker = self.current_worker
-        self.current_worker.start()
         
-    def on_fast_bouquets_selected_for_uninstall(self, selected_bouquets):
-        if not selected_bouquets: return
-        self.progress_screen = self.session.open(DownloadProgressScreen, title="Odinstalowywanie bukietów FAST...")
-        self.current_worker = IptvBouquetUninstallWorker(selected_bouquets, self.progress_screen.setProgress, self.on_fast_bouquet_installation_finished)
-        self.progress_screen.parent_worker = self.current_worker
-        self.current_worker.start()
-        
-    def on_fast_bouquet_installation_finished(self, final_message):
-        self.current_worker = None
-        def after_messagebox_callback(result):
-            if hasattr(self, 'progress_screen') and self.progress_screen:
-                self.progress_screen.close()
-            self.open_fast_bouquet_manager()
-        self.session.openWithCallback(after_messagebox_callback, MessageBox, final_message, type=MessageBox.TYPE_INFO)
 
-    def start_epg_download(self):
-        message = f"Czy chcesz pobrać i nadpisać plik:\n'{constants.SOURCES_XML_FILENAME}'\n\nw lokalizacji:\n'{constants.SOURCES_XML_TARGET_DIR}'?"
-        self.session.openWithCallback(self._confirm_epg_download, MessageBox, message, MessageBox.TYPE_YESNO, default=True)
         
-    def _confirm_epg_download(self, confirmed):
-        if not confirmed:
-            self.session.open(MessageBox, "Operacja anulowana.", type=MessageBox.TYPE_INFO)
-            return
-        self.current_worker = SourcesXmlDownloadWorker(callback_finished=self._on_epg_download_finished)
-        self.current_worker.start()
         
-    def _on_epg_download_finished(self, error_message, final_message):
-        self.current_worker = None
-        message = final_message or error_message
-        msg_type = MessageBox.TYPE_ERROR if error_message else MessageBox.TYPE_INFO
-        self.session.open(MessageBox, message, type=msg_type)
         
     def start_monitoringburz_install(self):
         package_name = "enigma2-plugin-extensions--azman-monitoringburz-py313"
@@ -1152,25 +1267,7 @@ class AzmanPanelMainScreen(Screen):
         self.open_timer.callback.append(action)
         self.open_timer.start(1, True)
 
-    def _start_feed_package_install(self, title, package_name):
-        if not os.path.exists(constants.FEED_CONF_TARGET_PATH):
-            self.session.open(MessageBox, "Do instalacji pluginu wymagane jest repozytorium Azman OPKG Feed.", type=MessageBox.TYPE_ERROR)
-            return
-        message = ("Czy na pewno chcesz pobrać i zainstalować plugin %s?\n\n"
-                   "Po instalacji zalecany będzie restart interfejsu graficznego.") % title
-        self.session.openWithCallback(
-            lambda confirmed: self._proceed_with_package_install(confirmed, title, package_name),
-            MessageBox, message, MessageBox.TYPE_YESNO, default=True
-        )
 
-    def _proceed_with_package_install(self, confirmed, title, package_name):
-        if not confirmed:
-            self.session.open(MessageBox, "Instalacja anulowana.", type=MessageBox.TYPE_INFO)
-            return
-        self._defer_action(lambda: self._handle_install_with_restart(
-            "Instalowanie %s" % title,
-            "opkg update && opkg install %s" % package_name
-        ))
 
     def start_iptv_org_install(self):
         message = ("Ta funkcja pobierze listę polskich kanałów z serwisu IPTV.ORG i utworzy z niej nowy bukiet.\n\n"

@@ -1,4 +1,4 @@
-# /usr/lib/enigma2/python/Plugins/Extensions/AzmanPanel/plugin.py
+
 
 from Plugins.Plugin import PluginDescriptor
 from .screens import AzmanPanelMainScreen

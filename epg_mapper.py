@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+
 """Lekki mapper EPG wspolny dla bukietow radiowych Azman Panel."""
 
 import json

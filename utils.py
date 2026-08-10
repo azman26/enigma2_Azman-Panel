@@ -1,5 +1,5 @@
-# /usr/lib/enigma2/python/Plugins/Extensions/AzmanPanel/utils.py
-# KOD Z POPRAWKĄ DLA FUNKCJI ROZPAKOWUJĄCEJ Picony
+
+
 
 import os
 import zipfile
@@ -36,7 +36,7 @@ def atomic_write_lines(path, lines, encoding="utf-8"):
         raise
 
 def log_error(exception, context_info="Unknown", **kwargs):
-    # ... (ta funkcja pozostaje bez zmian) ...
+    
     try:
         now = datetime.datetime.now()
         timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
@@ -74,14 +74,14 @@ def safe_extract_zip_member(zip_ref, member, target_dir):
     Bezpiecznie wypakowuje pojedynczy element z archiwum ZIP,
     zapobiegając atakom 'path traversal' i spłaszczając strukturę katalogów.
     """
-    # <<< POCZĄTEK MODYFIKACJI - IGNOROWANIE GŁÓWNEGO FOLDERU W ZIP ---
     
-    # Dzielimy ścieżkę pliku wewnątrz archiwum na części
+    
+    
     path_parts = member.filename.split('/')
     
-    # Jeśli ścieżka ma więcej niż jedną część (tzn. jest w folderze), usuwamy pierwszą (główny folder)
+    
     if len(path_parts) > 1:
-        # Ignorujemy puste nazwy plików (mogą się zdarzyć przy folderach)
+        
         if not path_parts[-1]:
             return
         filename = os.path.join(*path_parts[1:])
@@ -90,9 +90,9 @@ def safe_extract_zip_member(zip_ref, member, target_dir):
 
     target_path = os.path.join(target_dir, filename)
     
-    # <<< KONIEC MODYFIKACJI ---
     
-    # Sprawdzenie bezpieczeństwa ścieżki z poprawną granicą katalogu.
+    
+    
     target_root = os.path.realpath(target_dir)
     target_real = os.path.realpath(target_path)
     try:
@@ -102,10 +102,10 @@ def safe_extract_zip_member(zip_ref, member, target_dir):
     if not inside_target:
         raise zipfile.BadZipFile(f"Attempted path traversal attack: {member.filename}")
     
-    # Jeśli to nie jest katalog, utwórz katalog nadrzędny i wypakuj plik
+    
     if not member.is_dir():
         parent_dir = os.path.dirname(target_path)
         os.makedirs(parent_dir, exist_ok=True)
-        # Tryb wb celowo nadpisuje istniejący picon o tej samej nazwie.
+        
         with zip_ref.open(member, 'r') as source, open(target_path, 'wb') as target:
             shutil.copyfileobj(source, target)
