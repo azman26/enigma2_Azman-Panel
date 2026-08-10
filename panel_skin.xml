@@ -1,38 +1,33 @@
 ﻿<skin>
-    <!-- GĹĂ“WNY EKRAN PANELU - SIATKA 6x3 (1820px szerokoĹ›ci) -->
-    <screen name="AzmanPanelMainScreen" position="center,center" size="1820,830" title="Azman Panel" backgroundColor="#00000000" flags="wfNoBorder">
-        <!-- TĹA -->
-        <eLabel position="0,0" size="1820,95" backgroundColor="#66000000" zPosition="-1" />
-        <eLabel position="0,695" size="1820,135" backgroundColor="#66000000" zPosition="-1" />
-        <eLabel position="0,95" size="1820,600" backgroundColor="#4D000000" zPosition="-1" />
-        
-        <!-- NAGĹĂ“WEK -->
-        <widget name="title" position="20,20" size="250,50" font="Regular;40" halign="left" valign="center" foregroundColor="#FFFFFF" transparent="1" />
-        <widget source="selected_title" render="Label" position="270,20" size="1100,50" font="Regular;40" halign="left" valign="center" foregroundColor="#39c0e0" transparent="1" />
-        <eLabel position="20,78" size="1780,2" backgroundColor="#00bcd4" />
-        <widget name="tabs" position="20,88" size="1780,34" font="Regular;24" halign="left" valign="center" foregroundColor="#39c0e0" transparent="1" />
+    <screen name="AzmanPanelMainScreen" position="center,center" size="1280,720" title="Azman Panel" backgroundColor="#00000000" flags="wfNoBorder">
+        <eLabel position="0,0" size="1280,82" backgroundColor="#66000000" zPosition="-1" />
+        <eLabel position="0,645" size="1280,75" backgroundColor="#66000000" zPosition="-1" />
+        <eLabel position="0,82" size="1280,563" backgroundColor="#4D000000" zPosition="-1" />
+        <widget name="title" position="20,12" size="180,42" font="Regular;30" halign="left" valign="center" foregroundColor="#FFFFFF" transparent="1" />
+        <widget source="selected_title" render="Label" position="195,12" size="670,42" font="Regular;30" halign="left" valign="center" foregroundColor="#39c0e0" transparent="1" />
+        <eLabel position="20,58" size="1240,2" backgroundColor="#00bcd4" />
+        <widget name="tabs" position="20,62" size="1240,24" font="Regular;17" halign="left" valign="center" foregroundColor="#39c0e0" transparent="1" />
 
-        <!-- PANEL INFORMACJI -->
-        <eLabel position="1260,130" size="520,530" backgroundColor="#33000000" zPosition="0" />
-        <eLabel position="1260,130" size="520,2" backgroundColor="#00bcd4" zPosition="1" />
-        <widget name="plugin_info_title" position="1285,160" size="470,48" font="Regular;32" halign="left" valign="center" foregroundColor="#39c0e0" transparent="1" zPosition="2" />
-        <widget name="plugin_info_version" position="1285,220" size="470,34" font="Regular;22" halign="left" valign="center" foregroundColor="#cccccc" transparent="1" zPosition="2" />
-        <widget name="plugin_info_desc" position="1285,275" size="470,250" font="Regular;24" halign="left" valign="top" foregroundColor="#FFFFFF" transparent="1" zPosition="2" />
-        <widget name="info_content" position="40,145" size="1160,500" font="Regular;28" halign="left" valign="top" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
+        <eLabel position="895,105" size="365,510" backgroundColor="#33000000" zPosition="0" />
+        <eLabel position="895,105" size="365,2" backgroundColor="#00bcd4" zPosition="1" />
+        <widget name="plugin_info_title" position="915,126" size="330,38" font="Regular;24" halign="left" valign="center" foregroundColor="#39c0e0" transparent="1" zPosition="2" />
+        <widget name="plugin_info_version" position="915,170" size="330,26" font="Regular;17" halign="left" valign="center" foregroundColor="#cccccc" transparent="1" zPosition="2" />
+        <widget name="plugin_info_desc" position="915,215" size="330,340" font="Regular;18" halign="left" valign="top" foregroundColor="#FFFFFF" transparent="1" zPosition="2" />
+        <widget name="info_content" position="30,110" size="835,490" font="Regular;20" halign="left" valign="top" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
 
         <!-- RZÄ„D 1 (GĂłrny) -->
-        <widget name="marker_0x0" position="30,142" size="243,148" alphatest="blend" />
-        <widget name="logo_0x0" position="41,150" size="220,132" alphatest="blend" />
-        <widget name="tile_title_0x0" position="20,286" size="263,34" font="Regular;24" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
-        <widget name="marker_0x1" position="333,142" size="243,148" alphatest="blend" />
-        <widget name="logo_0x1" position="344,150" size="220,132" alphatest="blend" />
-        <widget name="tile_title_0x1" position="323,286" size="263,34" font="Regular;24" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
-        <widget name="marker_0x2" position="636,142" size="243,148" alphatest="blend" />
-        <widget name="logo_0x2" position="647,150" size="220,132" alphatest="blend" />
-        <widget name="tile_title_0x2" position="626,286" size="263,34" font="Regular;24" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
-        <widget name="marker_0x3" position="939,142" size="243,148" alphatest="blend" />
-        <widget name="logo_0x3" position="950,150" size="220,132" alphatest="blend" />
-        <widget name="tile_title_0x3" position="929,286" size="263,34" font="Regular;24" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
+        <widget name="marker_0x0" position="20,110" size="205,125" alphatest="blend" />
+        <widget name="logo_0x0" position="32,117" size="180,108" alphatest="blend" />
+        <widget name="tile_title_0x0" position="15,236" size="215,28" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
+        <widget name="marker_0x1" position="235,110" size="205,125" alphatest="blend" />
+        <widget name="logo_0x1" position="247,117" size="180,108" alphatest="blend" />
+        <widget name="tile_title_0x1" position="230,236" size="215,28" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
+        <widget name="marker_0x2" position="450,110" size="205,125" alphatest="blend" />
+        <widget name="logo_0x2" position="462,117" size="180,108" alphatest="blend" />
+        <widget name="tile_title_0x2" position="445,236" size="215,28" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
+        <widget name="marker_0x3" position="665,110" size="205,125" alphatest="blend" />
+        <widget name="logo_0x3" position="677,117" size="180,108" alphatest="blend" />
+        <widget name="tile_title_0x3" position="660,236" size="215,28" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
         <widget name="marker_0x4" position="1232,130" size="263,172" alphatest="blend" />
         <widget name="logo_0x4" position="1253,150" size="220,132" alphatest="blend" />
         <widget name="tile_title_0x4" position="1232,272" size="263,24" font="Regular;20" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
@@ -41,18 +36,18 @@
         <widget name="tile_title_0x5" position="1535,272" size="263,24" font="Regular;20" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
 
         <!-- RZÄ„D 2 (Ĺšrodkowy) -->
-        <widget name="marker_1x0" position="30,324" size="243,148" alphatest="blend" />
-        <widget name="logo_1x0" position="41,332" size="220,132" alphatest="blend" />
-        <widget name="tile_title_1x0" position="20,468" size="263,34" font="Regular;24" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
-        <widget name="marker_1x1" position="333,324" size="243,148" alphatest="blend" />
-        <widget name="logo_1x1" position="344,332" size="220,132" alphatest="blend" />
-        <widget name="tile_title_1x1" position="323,468" size="263,34" font="Regular;24" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
-        <widget name="marker_1x2" position="636,324" size="243,148" alphatest="blend" />
-        <widget name="logo_1x2" position="647,332" size="220,132" alphatest="blend" />
-        <widget name="tile_title_1x2" position="626,468" size="263,34" font="Regular;24" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
-        <widget name="marker_1x3" position="939,324" size="243,148" alphatest="blend" />
-        <widget name="logo_1x3" position="950,332" size="220,132" alphatest="blend" />
-        <widget name="tile_title_1x3" position="929,468" size="263,34" font="Regular;24" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
+        <widget name="marker_1x0" position="20,275" size="205,125" alphatest="blend" />
+        <widget name="logo_1x0" position="32,282" size="180,108" alphatest="blend" />
+        <widget name="tile_title_1x0" position="15,401" size="215,28" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
+        <widget name="marker_1x1" position="235,275" size="205,125" alphatest="blend" />
+        <widget name="logo_1x1" position="247,282" size="180,108" alphatest="blend" />
+        <widget name="tile_title_1x1" position="230,401" size="215,28" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
+        <widget name="marker_1x2" position="450,275" size="205,125" alphatest="blend" />
+        <widget name="logo_1x2" position="462,282" size="180,108" alphatest="blend" />
+        <widget name="tile_title_1x2" position="445,401" size="215,28" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
+        <widget name="marker_1x3" position="665,275" size="205,125" alphatest="blend" />
+        <widget name="logo_1x3" position="677,282" size="180,108" alphatest="blend" />
+        <widget name="tile_title_1x3" position="660,401" size="215,28" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
         <widget name="marker_1x4" position="1232,312" size="263,172" alphatest="blend" />
         <widget name="logo_1x4" position="1253,332" size="220,132" alphatest="blend" />
         <widget name="tile_title_1x4" position="1232,454" size="263,24" font="Regular;20" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
@@ -61,18 +56,18 @@
         <widget name="tile_title_1x5" position="1535,454" size="263,24" font="Regular;20" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
 
         <!-- RZÄ„D 3 (Dolny) -->
-        <widget name="marker_2x0" position="30,506" size="243,148" alphatest="blend" />
-        <widget name="logo_2x0" position="41,514" size="220,132" alphatest="blend" />
-        <widget name="tile_title_2x0" position="20,650" size="263,34" font="Regular;24" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
-        <widget name="marker_2x1" position="333,506" size="243,148" alphatest="blend" />
-        <widget name="logo_2x1" position="344,514" size="220,132" alphatest="blend" />
-        <widget name="tile_title_2x1" position="323,650" size="263,34" font="Regular;24" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
-        <widget name="marker_2x2" position="636,506" size="243,148" alphatest="blend" />
-        <widget name="logo_2x2" position="647,514" size="220,132" alphatest="blend" />
-        <widget name="tile_title_2x2" position="626,650" size="263,34" font="Regular;24" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
-        <widget name="marker_2x3" position="939,506" size="243,148" alphatest="blend" />
-        <widget name="logo_2x3" position="950,514" size="220,132" alphatest="blend" />
-        <widget name="tile_title_2x3" position="929,650" size="263,34" font="Regular;24" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
+        <widget name="marker_2x0" position="20,440" size="205,125" alphatest="blend" />
+        <widget name="logo_2x0" position="32,447" size="180,108" alphatest="blend" />
+        <widget name="tile_title_2x0" position="15,566" size="215,28" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
+        <widget name="marker_2x1" position="235,440" size="205,125" alphatest="blend" />
+        <widget name="logo_2x1" position="247,447" size="180,108" alphatest="blend" />
+        <widget name="tile_title_2x1" position="230,566" size="215,28" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
+        <widget name="marker_2x2" position="450,440" size="205,125" alphatest="blend" />
+        <widget name="logo_2x2" position="462,447" size="180,108" alphatest="blend" />
+        <widget name="tile_title_2x2" position="445,566" size="215,28" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
+        <widget name="marker_2x3" position="665,440" size="205,125" alphatest="blend" />
+        <widget name="logo_2x3" position="677,447" size="180,108" alphatest="blend" />
+        <widget name="tile_title_2x3" position="660,566" size="215,28" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
         <widget name="marker_2x4" position="1232,494" size="263,172" alphatest="blend" />
         <widget name="logo_2x4" position="1253,514" size="220,132" alphatest="blend" />
         <widget name="tile_title_2x4" position="1232,636" size="263,24" font="Regular;20" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
@@ -81,16 +76,16 @@
         <widget name="tile_title_2x5" position="1535,636" size="263,24" font="Regular;20" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
 
         <!-- STOPKA -->
-        <widget name="description" position="20,700" zPosition="2" size="1,1" foregroundColor="#FFFFFF" transparent="1" />
-        <widget source="key_red" render="Label" position="20,760" size="220,32" font="Regular;22" valign="center" foregroundColor="red" transparent="1" />
-        <widget source="key_green" render="Label" position="270,760" size="220,32" font="Regular;22" valign="center" foregroundColor="green" transparent="1" />
-        <widget source="key_yellow" render="Label" position="520,760" size="360,32" font="Regular;22" valign="center" foregroundColor="yellow" transparent="1" />
-        <widget source="key_blue" render="Label" position="900,760" size="360,32" font="Regular;22" valign="center" foregroundColor="blue" transparent="1" />
-        <widget name="credits_label" position="1120,760" zPosition="2" size="660,32" foregroundColor="#FFFFFF" valign="center" halign="right" font="Regular;24" transparent="1" />
+        <widget name="description" position="20,650" zPosition="2" size="1,1" foregroundColor="#FFFFFF" transparent="1" />
+        <widget source="key_red" render="Label" position="20,675" size="160,28" font="Regular;18" valign="center" foregroundColor="red" transparent="1" />
+        <widget source="key_green" render="Label" position="190,675" size="170,28" font="Regular;18" valign="center" foregroundColor="green" transparent="1" />
+        <widget source="key_yellow" render="Label" position="380,675" size="235,28" font="Regular;18" valign="center" foregroundColor="yellow" transparent="1" />
+        <widget source="key_blue" render="Label" position="625,675" size="230,28" font="Regular;18" valign="center" foregroundColor="blue" transparent="1" />
+        <widget name="credits_label" position="870,675" zPosition="2" size="390,28" foregroundColor="#FFFFFF" valign="center" halign="right" font="Regular;18" transparent="1" />
     </screen>
 
     <!-- POZOSTAĹE EKRANY -->
-    <screen name="AzmanFeedScreen" position="center,center" size="1280,720" title="Azman Feed - MenedĹĽer pakietĂłw" backgroundColor="#00000000" flags="wfNoBorder">
+    <screen name="AzmanFeedScreen" position="center,center" size="1280,720" title="Azman Feed - Menedżer pakietów" backgroundColor="#00000000" flags="wfNoBorder">
         <eLabel position="0,0" size="1280,88" backgroundColor="#F0000000" zPosition="-1" />
         <eLabel position="0,88" size="1280,562" backgroundColor="#F0000000" zPosition="-1" />
         <eLabel position="0,650" size="1280,70" backgroundColor="#F0000000" zPosition="-1" />
@@ -107,7 +102,7 @@
         <eLabel position="0,88" size="1280,632" backgroundColor="#4D000000" zPosition="-1" />
         <widget name="console" position="20,20" size="1240,680" font="Console;24" backgroundColor="#00000000" transparent="1" />
     </screen>
-    <screen name="DownloadProgressScreen" position="center,center" size="800,150" title="PostÄ™p..." backgroundColor="#00000000" flags="wfNoBorder">
+    <screen name="DownloadProgressScreen" position="center,center" size="800,150" title="Postęp..." backgroundColor="#00000000" flags="wfNoBorder">
         <eLabel position="0,0" size="800,90" backgroundColor="#66000000" zPosition="-1" />
         <eLabel position="0,90" size="800,60" backgroundColor="#4D000000" zPosition="-1" />
         <widget source="title" render="Label" position="10,12" size="780,34" font="Regular;24" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
@@ -121,7 +116,7 @@
         <eLabel position="30,90" size="840,2" backgroundColor="#00bcd4" />
         <widget name="message" position="45,120" size="810,80" font="Regular;24" halign="center" valign="center" foregroundColor="#cccccc" transparent="1" />
     </screen>
-    <screen name="PiconPathSelectionScreen" position="center,center" size="1024,576" title="Wybierz lokalizacjÄ™ Picon" backgroundColor="#00000000" flags="wfNoBorder">
+    <screen name="PiconPathSelectionScreen" position="center,center" size="1024,576" title="Wybierz lokalizację picon" backgroundColor="#00000000" flags="wfNoBorder">
         <eLabel position="0,0" size="1024,88" backgroundColor="#66000000" zPosition="-1" />
         <eLabel position="0,88" size="1024,418" backgroundColor="#4D000000" zPosition="-1" />
         <eLabel position="0,506" size="1024,70" backgroundColor="#66000000" zPosition="-1" />
@@ -144,26 +139,26 @@
         <widget source="key_green" render="Label" position="315,580" size="230,32" font="Regular;22" valign="center" foregroundColor="green" transparent="1" />
         <widget source="key_yellow" render="Label" position="595,580" size="370,32" font="Regular;22" valign="center" foregroundColor="yellow" transparent="1" />
     </screen>
-    <screen name="PackageTileSelectionScreen" position="center,center" size="1820,830" title="Wybierz elementy" backgroundColor="#00000000" flags="wfNoBorder">
-        <eLabel position="0,0" size="1820,95" backgroundColor="#66000000" zPosition="-1" />
-        <eLabel position="0,95" size="1820,600" backgroundColor="#4D000000" zPosition="-1" />
-        <eLabel position="0,695" size="1820,135" backgroundColor="#66000000" zPosition="-1" />
-        <widget source="title" render="Label" position="20,20" size="1780,50" font="Regular;40" halign="left" valign="center" foregroundColor="#39c0e0" transparent="1" />
-        <eLabel position="20,78" size="1780,2" backgroundColor="#00bcd4" />
-        <widget name="selection_info" position="20,94" size="1780,26" font="Regular;21" halign="center" foregroundColor="#39c0e0" transparent="1" />
-        <widget name="target_info" position="20,662" size="1780,24" font="Regular;19" halign="center" foregroundColor="#cccccc" transparent="1" />
-        <widget name="marker_0" position="70,125" size="500,160" scale="1" alphatest="blend" /><widget name="icon_0" position="240,134" size="160,82" scale="1" alphatest="blend" /><widget name="tile_0" position="85,218" size="470,60" font="Regular;23" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
-        <widget name="marker_1" position="660,125" size="500,160" scale="1" alphatest="blend" /><widget name="icon_1" position="830,134" size="160,82" scale="1" alphatest="blend" /><widget name="tile_1" position="675,218" size="470,60" font="Regular;23" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
-        <widget name="marker_2" position="1250,125" size="500,160" scale="1" alphatest="blend" /><widget name="icon_2" position="1420,134" size="160,82" scale="1" alphatest="blend" /><widget name="tile_2" position="1265,218" size="470,60" font="Regular;23" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
-        <widget name="marker_3" position="70,300" size="500,160" scale="1" alphatest="blend" /><widget name="icon_3" position="240,309" size="160,82" scale="1" alphatest="blend" /><widget name="tile_3" position="85,393" size="470,60" font="Regular;23" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
-        <widget name="marker_4" position="660,300" size="500,160" scale="1" alphatest="blend" /><widget name="icon_4" position="830,309" size="160,82" scale="1" alphatest="blend" /><widget name="tile_4" position="675,393" size="470,60" font="Regular;23" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
-        <widget name="marker_5" position="1250,300" size="500,160" scale="1" alphatest="blend" /><widget name="icon_5" position="1420,309" size="160,82" scale="1" alphatest="blend" /><widget name="tile_5" position="1265,393" size="470,60" font="Regular;23" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
-        <widget name="marker_6" position="70,475" size="500,160" scale="1" alphatest="blend" /><widget name="icon_6" position="240,484" size="160,82" scale="1" alphatest="blend" /><widget name="tile_6" position="85,568" size="470,60" font="Regular;23" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
-        <widget name="marker_7" position="660,475" size="500,160" scale="1" alphatest="blend" /><widget name="icon_7" position="830,484" size="160,82" scale="1" alphatest="blend" /><widget name="tile_7" position="675,568" size="470,60" font="Regular;23" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
-        <widget name="marker_8" position="1250,475" size="500,160" scale="1" alphatest="blend" /><widget name="icon_8" position="1420,484" size="160,82" scale="1" alphatest="blend" /><widget name="tile_8" position="1265,568" size="470,60" font="Regular;23" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
-        <widget source="key_red" render="Label" position="20,748" size="220,36" font="Regular;24" foregroundColor="red" transparent="1" />
-        <widget source="key_green" render="Label" position="270,748" size="300,36" font="Regular;24" foregroundColor="green" transparent="1" />
-        <widget source="key_yellow" render="Label" position="610,748" size="460,36" font="Regular;24" foregroundColor="yellow" transparent="1" />
+    <screen name="PackageTileSelectionScreen" position="center,center" size="1280,720" title="Wybierz elementy" backgroundColor="#00000000" flags="wfNoBorder">
+        <eLabel position="0,0" size="1280,82" backgroundColor="#CC080D12" zPosition="-1" />
+        <eLabel position="0,82" size="1280,563" backgroundColor="#B3080D12" zPosition="-1" />
+        <eLabel position="0,645" size="1280,75" backgroundColor="#CC080D12" zPosition="-1" />
+        <widget source="title" render="Label" position="20,12" size="1240,38" font="Regular;30" halign="left" valign="center" foregroundColor="#39c0e0" transparent="1" />
+        <eLabel position="20,58" size="1240,2" backgroundColor="#00bcd4" />
+        <widget name="selection_info" position="20,64" size="1240,22" font="Regular;16" halign="center" foregroundColor="#39c0e0" transparent="1" />
+        <widget name="target_info" position="20,620" size="1240,18" font="Regular;14" halign="center" foregroundColor="#cccccc" transparent="1" />
+        <widget name="marker_0" position="55,100" size="340,145" scale="1" alphatest="blend" /><widget name="icon_0" position="145,110" size="160,82" scale="1" alphatest="blend" /><widget name="tile_0" position="65,195" size="320,42" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
+        <widget name="marker_1" position="470,100" size="340,145" scale="1" alphatest="blend" /><widget name="icon_1" position="560,110" size="160,82" scale="1" alphatest="blend" /><widget name="tile_1" position="480,195" size="320,42" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
+        <widget name="marker_2" position="885,100" size="340,145" scale="1" alphatest="blend" /><widget name="icon_2" position="975,110" size="160,82" scale="1" alphatest="blend" /><widget name="tile_2" position="895,195" size="320,42" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
+        <widget name="marker_3" position="55,260" size="340,145" scale="1" alphatest="blend" /><widget name="icon_3" position="145,270" size="160,82" scale="1" alphatest="blend" /><widget name="tile_3" position="65,355" size="320,42" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
+        <widget name="marker_4" position="470,260" size="340,145" scale="1" alphatest="blend" /><widget name="icon_4" position="560,270" size="160,82" scale="1" alphatest="blend" /><widget name="tile_4" position="480,355" size="320,42" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
+        <widget name="marker_5" position="885,260" size="340,145" scale="1" alphatest="blend" /><widget name="icon_5" position="975,270" size="160,82" scale="1" alphatest="blend" /><widget name="tile_5" position="895,355" size="320,42" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
+        <widget name="marker_6" position="55,420" size="340,145" scale="1" alphatest="blend" /><widget name="icon_6" position="145,430" size="160,82" scale="1" alphatest="blend" /><widget name="tile_6" position="65,515" size="320,42" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
+        <widget name="marker_7" position="470,420" size="340,145" scale="1" alphatest="blend" /><widget name="icon_7" position="560,430" size="160,82" scale="1" alphatest="blend" /><widget name="tile_7" position="480,515" size="320,42" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
+        <widget name="marker_8" position="885,420" size="340,145" scale="1" alphatest="blend" /><widget name="icon_8" position="975,430" size="160,82" scale="1" alphatest="blend" /><widget name="tile_8" position="895,515" size="320,42" font="Regular;18" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
+        <widget source="key_red" render="Label" position="20,675" size="190,28" font="Regular;18" foregroundColor="red" transparent="1" />
+        <widget source="key_green" render="Label" position="255,675" size="270,28" font="Regular;18" foregroundColor="green" transparent="1" />
+        <widget source="key_yellow" render="Label" position="560,675" size="400,28" font="Regular;18" foregroundColor="yellow" transparent="1" />
     </screen>
 </skin>
 

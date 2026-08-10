@@ -626,35 +626,20 @@ class AzmanPanelMainScreen(Screen):
             python_version = runtime.get_runtime_info()["python"]
             self["info_content"].setText(
                 "Azman Panel\n\n"
-                "Centralny panel narzędziowy ekosystemu Azman dla Enigma2.\n\n"
+                "Centralny panel instalacyjny i narzędziowy dla Enigma2.\n\n"
                 "Panel jest instalowany jako pierwszy plugin na dekoderze.\n"
-                "Z niego instalowane są pozostałe pluginy Azman, bukiety, listy kanałów,\n"
-                "EPG, picony oraz inne narzędzia z feeda Azman.\n\n"
+                "Z niego instalujesz pluginy Azman, bukiety, EPG, picony i inne narzędzia.\n\n"
+                "Środowisko Python dekodera: %s\n"
+                "Panel instaluje tylko paczki zgodne z tą wersją.\n\n"
                 "Wersja panelu: %s\n"
-                "Format wersji: YYYY.MM.DD-HHMM\n\n"
+                "Wersjonowanie: YYYY.MM.DD-HHMM\n\n"
+                "ZIELONY — włącz/wyłącz widoczność panelu w głównym menu Enigma2\n\n"
                 "Sterowanie:\n"
                 "OK — otwórz zaznaczony element\n"
                 "ZIELONY — instaluj zaznaczony plugin\n"
                 "ŻÓŁTY — poprzednia zakładka\n"
                 "NIEBIESKI — następna zakładka\n"
-                "CZERWONY — zamknij panel" % constants.PLUGIN_VERSION
-            )
-            self["info_content"].setText(
-                "Azman Panel\n\n"
-                "Centralny panel instalacyjny i narzedziowy dla Enigma2.\n\n"
-                "Panel jest instalowany jako pierwszy plugin na dekoderze.\n"
-                "Z niego instalujesz pluginy Azman, bukiety, EPG, picony i inne narzedzia.\n\n"
-                "Srodowisko Python dekodera: %s\n"
-                "Panel instaluje tylko paczki zgodne z ta wersja.\n\n"
-                "Wersja panelu: %s\n"
-                "Wersjonowanie: YYYY.MM.DD-HHMM\n\n"
-                "ZIELONY - wlacz/wylacz widocznosc Panelu w glownym menu Enigma2\n\n"
-                "Sterowanie:\n"
-                "OK - otworz zaznaczony element\n"
-                "ZIELONY - instaluj zaznaczony plugin\n"
-                "ZOLTY - poprzednia zakladka\n"
-                "NIEBIESKI - nastepna zakladka\n"
-                "CZERWONY - zamknij panel" % (python_version, constants.PLUGIN_VERSION)
+                "CZERWONY — zamknij panel" % (python_version, constants.PLUGIN_VERSION)
             )
             self["info_content"].show()
             self["key_green"].setText("Widocznosc menu")
@@ -757,12 +742,12 @@ class AzmanPanelMainScreen(Screen):
     def toggle_main_menu_visibility(self):
         config.plugins.AzmanPanel.main_menu_visible.value = not config.plugins.AzmanPanel.main_menu_visible.value
         save_config()
-        state = "wlaczona" if config.plugins.AzmanPanel.main_menu_visible.value else "wylaczona"
+        state = "włączona" if config.plugins.AzmanPanel.main_menu_visible.value else "wyłączona"
         self.apply_tab_filter()
         self.draw_page()
         self.session.open(
             MessageBox,
-            "Widocznosc Azman Panel w glownym menu Enigma2: %s.\n\nZrestartuj GUI, aby zastosowac zmiane." % state,
+            "Widoczność Azman Panel w głównym menu Enigma2: %s.\n\nZrestartuj GUI, aby zastosować zmianę." % state,
             MessageBox.TYPE_INFO,
             timeout=8,
         )
@@ -794,9 +779,9 @@ class AzmanPanelMainScreen(Screen):
     def show_coming_soon(self, feature_name):
         self.session.open(
             MessageBox,
-            "%s bedzie dostepny w Azman Panel wkrotce." % feature_name,
+            "%s będzie dostępny w Azman Panel wkrótce." % feature_name,
             type=MessageBox.TYPE_INFO,
-            title="Wkrotce",
+            title="Wkrótce",
         )
 
     def _open_package_manager(self, title, filter_keywords=None):
@@ -1116,7 +1101,8 @@ class AzmanPanelMainScreen(Screen):
         
         
     def start_monitoringburz_install(self):
-        package_name = "enigma2-plugin-extensions--azman-monitoringburz-py313"
+        runtime_info = runtime.get_runtime_info()
+        package_name = "enigma2-plugin-extensions--azman-monitoringburz-py%s%s" % (runtime_info["python_major"], runtime_info["python_minor"])
         try:
             installed = subprocess.run(
                 ["opkg", "list-installed"],
@@ -1167,7 +1153,8 @@ class AzmanPanelMainScreen(Screen):
         self.current_worker.start()
 
     def start_stacjameteommz_install(self):
-        package_name = "enigma2-plugin-extensions--azman-stacjameteommz-py313"
+        runtime_info = runtime.get_runtime_info()
+        package_name = "enigma2-plugin-extensions--azman-stacjameteommz-py%s%s" % (runtime_info["python_major"], runtime_info["python_minor"])
         try:
             installed = subprocess.run(
                 ["opkg", "list-installed"], stdout=subprocess.PIPE,
@@ -1214,7 +1201,8 @@ class AzmanPanelMainScreen(Screen):
         self.current_worker.start()
 
     def start_imgwmeteo_install(self):
-        package_name = "enigma2-plugin-extensions--azman-imgwmeteo-py313"
+        runtime_info = runtime.get_runtime_info()
+        package_name = "enigma2-plugin-extensions--azman-imgwmeteo-py%s%s" % (runtime_info["python_major"], runtime_info["python_minor"])
         try:
             installed = subprocess.run(
                 ["opkg", "list-installed"], stdout=subprocess.PIPE,
@@ -1264,9 +1252,9 @@ class AzmanPanelMainScreen(Screen):
         message = (
             "YT Playlist Player jest pobierany z prywatnego, niepublicznego feeda autora.\n\n"
             "Wymagana biblioteka: python3-yt-dlp.\n"
-            "Zostanie zainstalowana automatycznie przez opkg, jezeli nie ma jej na dekoderze.\n\n"
-            "Pobrany pakiet zostanie sprawdzony przez SHA-256 przed instalacja.\n\n"
-            "Czy chcesz kontynuowac?"
+            "Zostanie zainstalowana automatycznie przez opkg, jeżeli nie ma jej na dekoderze.\n\n"
+            "Pobrany pakiet zostanie sprawdzony przez SHA-256 przed instalacją.\n\n"
+            "Czy chcesz kontynuować?"
         )
         self.session.openWithCallback(
             self._confirm_ytplaylistplayer_install,
@@ -1339,7 +1327,7 @@ class AzmanPanelMainScreen(Screen):
         error_message, package_path = getattr(self, "_pending_manifest_result", (None, None))
         self._pending_manifest_result = None
         if error_message:
-            self.session.open(MessageBox, "Nie udaĹ‚o siÄ™ przygotowaÄ‡ instalacji:\n%s" % error_message, type=MessageBox.TYPE_ERROR)
+            self.session.open(MessageBox, "Nie udało się przygotować instalacji:\n%s" % error_message, type=MessageBox.TYPE_ERROR)
             return
         if not package_path or not os.path.isfile(package_path):
             self.session.open(MessageBox, "Nie znaleziono pobranego pakietu.", type=MessageBox.TYPE_ERROR)
