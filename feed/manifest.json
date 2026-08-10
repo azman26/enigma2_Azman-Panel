@@ -14,9 +14,9 @@
       "package": "enigma2-plugin-extensions--azman-azmanpanel",
       "variants": {
         "all": {
-          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.08.09-2248_all.ipk",
-          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.08.09-2248/enigma2-plugin-extensions--azman-azmanpanel_2026.08.09-2248_all.ipk",
-          "sha256": "2db712ea44966afa93fb3b4c1116055e5eab0a8b5e802fb43eee215dac383cee"
+          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.08.10-1643_all.ipk",
+          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.08.10-1643/enigma2-plugin-extensions--azman-azmanpanel_2026.08.10-1643_all.ipk",
+          "sha256": "2eae613b0edfb1a7faaec714471a406c79132dc55f4e20c31b11f041d50f1271"
         }
       },
       "protected": false
