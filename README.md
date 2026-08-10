@@ -6,21 +6,19 @@ Azman Panel służy do instalowania i zarządzania pluginami, listami kanałów,
 
 ## Instalacja
 
-1. Pobierz najnowszy plik IPK z sekcji [Releases](../../releases).
-2. Skopiuj go do katalogu `/tmp` na dekoderze.
-3. Połącz się z dekoderem przez SSH i wykonaj:
+Najprostsza instalacja przez SSH — pobierze i zainstaluje najnowszą wersję Azman Panel:
 
 ```sh
-opkg install /tmp/enigma2-plugin-extensions--azman-azmanpanel_2026.08.07-2151_all.ipk
+wget -q --no-check-certificate https://raw.githubusercontent.com/azman26/enigma2_Azman-Panel/main/installer.sh -O - | /bin/sh
 ```
 
-4. Uruchom ponownie interfejs Enigma2:
+Po zakończeniu instalacji uruchom ponownie interfejs Enigma2:
 
 ```sh
 systemctl restart enigma2
 ```
 
-Po restarcie Azman Panel będzie dostępny w menu wtyczek.
+Azman Panel będzie dostępny w menu wtyczek oraz — po włączeniu tej opcji w zakładce Info — w głównym menu Enigma2.
 
 ## Funkcje
 
