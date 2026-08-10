@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "repository": "Azman Feed",
-  "updated": "2026-08-10T21:13:00Z",
+  "updated": "2026-08-10T22:13:00Z",
   "packages": [
     {
       "id": "azman-panel",
       "name": "Azman Panel",
-      "version": "2026.08.10-2313",
+      "version": "2026.08.11-0013",
       "category": "system",
       "description": "Panel instalacyjny i narzędziowy ekosystemu Azman.",
       "python": ["3.12", "3.13", "3.14"],
@@ -14,9 +14,9 @@
       "package": "enigma2-plugin-extensions--azman-azmanpanel",
       "variants": {
         "all": {
-          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.08.10-2313_all.ipk",
-          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.08.10-2313/enigma2-plugin-extensions--azman-azmanpanel_2026.08.10-2313_all.ipk",
-          "sha256": "bbc465104acf613b993f8740b5a3be96f4737a0976299606ba4e277d92edb165"
+          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.08.11-0013_all.ipk",
+          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.08.11-0013/enigma2-plugin-extensions--azman-azmanpanel_2026.08.11-0013_all.ipk",
+          "sha256": "6a7d82565555bd810f1bf5b29703864d6b26859764dbaa189b876c0cf56d0425"
         }
       },
       "protected": false
@@ -85,6 +85,23 @@
         "all": {
           "ipk": "all/enigma2-plugin-extensions-airly_2.0-r6_all.ipk",
           "sha256": "c0d41426f03687113cdd9cc35c611259fe6c80a4a37e095c79d150066929c93a"
+        }
+      },
+      "protected": true
+    },
+    {
+      "id": "ytplaylistplayer",
+      "name": "YT Playlist Player",
+      "version": "2026.08.11-0008",
+      "category": "Pluginy",
+      "description": "Odtwarzanie wlasnych playlist, kanalow i transmisji YouTube.",
+      "python": ["3.13"],
+      "architecture": ["all"],
+      "package": "enigma2-plugin-extensions--azman-ytplaylistplayer-py313",
+      "variants": {
+        "py313": {
+          "ipk": "py313/enigma2-plugin-extensions--azman-ytplaylistplayer-py313_2026.08.11-0008_all.ipk",
+          "sha256": "cc1e7780c1d7f5c443267aa889bd5eb585f8c4503e23958ef6c204f1069c3068"
         }
       },
       "protected": true
