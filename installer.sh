@@ -11,13 +11,19 @@ download_file() {
     target="$2"
 
     if command -v wget >/dev/null 2>&1; then
-        wget -q --no-check-certificate "$url" -O "$target"
-        return
+        if wget -q --no-check-certificate "$url" -O "$target"; then
+            return 0
+        fi
+        echo "Blad: nie udalo sie pobrac pliku: $url"
+        return 1
     fi
 
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSLk "$url" -o "$target"
-        return
+        if curl -fsSLk "$url" -o "$target"; then
+            return 0
+        fi
+        echo "Blad: nie udalo sie pobrac pliku: $url"
+        return 1
     fi
 
     echo "Blad: brak wget i curl."
@@ -68,4 +74,18 @@ echo "Instalowanie Azman Panel..."
 opkg update
 opkg --force-reinstall install "$IPK_FILE"
 
-echo "Azman Panel zostal zainstalowany. Zalecany jest restart GUI Enigma2."
+echo "Azman Panel zostal zainstalowany. Restartowanie GUI Enigma2..."
+
+if command -v systemctl >/dev/null 2>&1 && systemctl restart enigma2; then
+    exit 0
+fi
+
+if command -v init >/dev/null 2>&1; then
+    init 4
+    sleep 2
+    init 3
+    exit 0
+fi
+
+echo "Blad: Panel zostal zainstalowany, ale GUI nie zostalo zrestartowane automatycznie."
+exit 1
