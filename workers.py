@@ -187,6 +187,7 @@ class ManifestPackageDownloadWorker(BaseWorker):
     def run(self):
         target = None
         try:
+            utils.log_event("Rozpoczęto pobieranie pakietu", package_id=self.package_id)
             with urllib.request.urlopen(constants.AZMAN_MANIFEST_URL, timeout=20) as response:
                 manifest = json.loads(response.read().decode("utf-8"))
             entry = next((item for item in manifest.get("packages", [])
@@ -236,8 +237,10 @@ class ManifestPackageDownloadWorker(BaseWorker):
                     pass
                 raise ValueError("Nieprawidłowa suma SHA-256 pobranego pakietu.")
             self.package_path = target
+            utils.log_event("Pakiet pobrany i zweryfikowany", package_id=self.package_id, size=size)
         except Exception as error:
             self.error_message = str(error)
+            utils.log_error(error, self.__class__.__name__, package_id=self.package_id)
             if target:
                 try:
                     os.unlink(target)
@@ -245,6 +248,54 @@ class ManifestPackageDownloadWorker(BaseWorker):
                     pass
         finally:
             self._safe_call_main_thread(self.error_message, self.package_path)
+
+
+class ManifestUpdateCheckWorker(BaseWorker):
+    def __init__(self, callback_finished):
+        super(ManifestUpdateCheckWorker, self).__init__(callback_finished)
+
+    @staticmethod
+    def _version_key(value):
+        numbers = re.findall(r"\d+", str(value or ""))
+        return tuple(int(number) for number in numbers) or (0,)
+
+    def _installed_packages(self):
+        installed = {}
+        process = subprocess.Popen(["opkg", "list-installed"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output, _ = process.communicate(timeout=20)
+        if process.returncode:
+            raise RuntimeError("Nie można odczytać listy zainstalowanych pakietów.")
+        for line in output.decode("utf-8", "ignore").splitlines():
+            if " - " in line:
+                package, version = line.split(" - ", 1)
+                installed[package.strip()] = version.strip()
+        return installed
+
+    def run(self):
+        try:
+            request = urllib.request.Request(constants.AZMAN_MANIFEST_URL, headers={"User-Agent": "AzmanPanel/1.0"})
+            with urllib.request.urlopen(request, timeout=12) as response:
+                manifest = json.loads(response.read().decode("utf-8"))
+            installed = self._installed_packages()
+            updates = []
+            panel_update = ""
+            for entry in manifest.get("packages", []):
+                package = entry.get("package")
+                remote_version = str(entry.get("version") or "")
+                if not package or not remote_version:
+                    continue
+                local_version = constants.PLUGIN_VERSION if entry.get("id") == "azman-panel" else installed.get(package)
+                if not local_version or self._version_key(remote_version) <= self._version_key(local_version):
+                    continue
+                name = str(entry.get("name") or entry.get("id") or package)
+                if entry.get("id") == "azman-panel":
+                    panel_update = remote_version
+                else:
+                    updates.append((name, local_version, remote_version))
+            self._safe_call_main_thread(None, panel_update, updates)
+        except Exception as error:
+            utils.log_error(error, self.__class__.__name__, url=constants.AZMAN_MANIFEST_URL)
+            self._safe_call_main_thread(str(error), "", [])
 
 class PiconZipListWorker(BaseWorker):
     

@@ -9,8 +9,45 @@ import shutil
 import re
 import tempfile
 
-LOG_FILE = "/tmp/azman_panel.log"
+LOG_FILE = "/tmp/Azman_Panel.log"
+MAX_LOG_SIZE = 512 * 1024
+LOG_TAIL_SIZE = 384 * 1024
 BOUQUET_FILENAME_RE = re.compile(r"^userbouquet\.[A-Za-z0-9._-]+\.tv$")
+
+def _sanitize_log_value(key, value):
+    if str(key).lower() in ("token", "authorization", "password", "secret", "url", "source", "source_url"):
+        return "[ukryto]"
+    text = str(value)
+    text = re.sub(r"([?&](?:token|key|auth|authorization)=)[^&\s]+", r"\1***", text, flags=re.IGNORECASE)
+    return re.sub(r"https?://[^\s'\"]+", "[adres ukryty]", text, flags=re.IGNORECASE)
+
+def _rotate_log():
+    try:
+        if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > MAX_LOG_SIZE:
+            with open(LOG_FILE, "rb") as handle:
+                handle.seek(-LOG_TAIL_SIZE, os.SEEK_END)
+                data = handle.read()
+            with open(LOG_FILE, "wb") as handle:
+                handle.write(b"--- Azman Panel log: zachowano ostatnie wpisy ---\n")
+                handle.write(data)
+    except OSError:
+        pass
+
+def _write_log(level, message, **kwargs):
+    try:
+        _rotate_log()
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        details = " ".join("%s=%s" % (key, _sanitize_log_value(key, value)) for key, value in sorted(kwargs.items()))
+        line = "[%s] [%s] %s" % (timestamp, level, _sanitize_log_value("message", message))
+        if details:
+            line += " | " + details
+        with open(LOG_FILE, "a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+    except Exception as error:
+        print("[AzmanPanel] CRITICAL LOGGING ERROR: %s" % error)
+
+def log_event(message, **kwargs):
+    _write_log("INFO", message, **kwargs)
 
 def validate_bouquet_filename(filename):
     """Zwraca bezpieczną nazwę bukietu albo zgłasza ValueError."""
@@ -62,37 +99,15 @@ def remove_bouquet_and_registration(directory, filename):
         atomic_write_lines(registry_path, retained)
 
 def log_error(exception, context_info="Unknown", **kwargs):
-    
     try:
-        now = datetime.datetime.now()
-        timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
-
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"--- ERROR LOG ENTRY: {timestamp} ---\n")
-            f.write(f"Context: {context_info}\n\n")
-
-            f.write("--- Additional Info ---\n")
-            if not kwargs:
-                f.write("None provided.\n")
-            else:
-                for key, value in kwargs.items():
-                    f.write(f"{key.capitalize()}: {value}\n")
-            f.write("\n")
-
-            f.write("--- Exception Details ---\n")
-            f.write(f"Type: {type(exception).__name__}\n")
-            f.write(f"Message: {str(exception)}\n\n")
-
-            f.write("--- Full Traceback ---\n")
-            traceback.print_exc(file=f)
-            f.write("\n")
-
-            f.write("--- END OF ENTRY ---\n\n")
-
-        print(f"[AzmanPanel] Error details have been written to: {LOG_FILE}")
-
-    except Exception as log_e:
-        print(f"[AzmanPanel] CRITICAL LOGGING ERROR: Could not write to log file {LOG_FILE}. Reason: {log_e}")
+        _write_log("ERROR", "%s: %s: %s" % (context_info, type(exception).__name__, exception), **kwargs)
+        trace = traceback.format_exc()
+        if trace and trace.strip() != "NoneType: None":
+            with open(LOG_FILE, "a", encoding="utf-8") as handle:
+                handle.write(trace + "\n")
+        print("[AzmanPanel] Error details have been written to: %s" % LOG_FILE)
+    except Exception as log_error:
+        print("[AzmanPanel] CRITICAL LOGGING ERROR: %s" % log_error)
 
 
 def safe_extract_zip_member(zip_ref, member, target_dir):

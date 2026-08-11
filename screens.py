@@ -15,15 +15,21 @@ from Screens.MessageBox import MessageBox
 from Screens.ChoiceBox import ChoiceBox
 from Screens.Standby import TryQuitMainloop
 from Tools.LoadPixmap import LoadPixmap
-from skin import loadSkin
-from enigma import eTimer, eConsoleAppContainer
+from enigma import eTimer, eConsoleAppContainer, gRGB
 
 from . import constants, runtime, utils
-from .workers import PiconZipListWorker, PiconInstallationWorker, PrivateBouquetListWorker, PrivateBouquetInstallWorker, IptvBouquetUninstallWorker, IptvOrgWorker, MyRadioOnlineBouquetWorker, PolskieRadioBouquetWorker, RmfonBouquetWorker, EurozetBouquetWorker, PackageListWorker, ManifestPackageDownloadWorker, SatellitesXmlUpdateWorker
+from .azman_ui import load_responsive_skin
+from .workers import PiconZipListWorker, PiconInstallationWorker, PrivateBouquetListWorker, PrivateBouquetInstallWorker, IptvBouquetUninstallWorker, IptvOrgWorker, MyRadioOnlineBouquetWorker, PolskieRadioBouquetWorker, RmfonBouquetWorker, EurozetBouquetWorker, PackageListWorker, ManifestPackageDownloadWorker, ManifestUpdateCheckWorker, SatellitesXmlUpdateWorker
 from .config import config, save_config
 
 PLUGIN_PATH = os.path.dirname(os.path.realpath(__file__))
-loadSkin(f"{PLUGIN_PATH}/panel_skin.xml")
+
+
+def _load_panel_skin():
+    load_responsive_skin(os.path.join(PLUGIN_PATH, "panel_skin.xml"), "azmanpanel")
+
+
+_load_panel_skin()
 
 class AzmanSelectListScreen(Screen):
     def __init__(self, session, title, item_list, on_install_callback=None, on_uninstall_callback=None):
@@ -255,13 +261,30 @@ class PackageTileSelectionScreen(Screen):
             self.close()
 
 class OpkgCommandScreen(Screen):
+    skin = """
+        <screen name="OpkgCommandScreen" position="center,center" size="1000,560" title="Azman Panel" backgroundColor="#00000000" flags="wfNoBorder">
+            <eLabel position="0,0" size="1000,80" backgroundColor="#1A000000" zPosition="-1" />
+            <eLabel position="0,80" size="1000,410" backgroundColor="#33000000" zPosition="-1" />
+            <eLabel position="0,490" size="1000,70" backgroundColor="#1A000000" zPosition="-1" />
+            <widget name="title" position="35,16" size="930,42" font="Regular;32" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
+            <eLabel position="35,66" size="930,2" backgroundColor="#00bcd4" />
+            <widget name="status" position="40,95" size="920,34" font="Regular;23" halign="center" valign="center" foregroundColor="#39c0e0" transparent="1" />
+            <widget name="console" position="55,145" size="890,315" font="Regular;21" transparent="1" />
+            <widget name="key_hint" position="40,508" size="920,32" font="Regular;22" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
+        </screen>
+    """
+
     def __init__(self, session, command, title="", callback=None, restart_gui=False):
         Screen.__init__(self, session)
         self.command = command
+        self.command_title = title or "Polecenie Azman Panel"
         self.callback = callback
         self.restart_gui = restart_gui
         self.setTitle(title)
+        self["title"] = Label(self.command_title)
         self["console"] = ScrollLabel()
+        self["status"] = Label("Trwa instalacja. Proszę czekać…")
+        self["key_hint"] = Label("Przebieg instalacji")
         self["actions"] = ActionMap(
             ["OkCancelActions", "DirectionActions"], 
             {
@@ -277,7 +300,8 @@ class OpkgCommandScreen(Screen):
         self.is_finished = False
 
     def run_command(self):
-        self["console"].setText(f"> {self.command}\n\n")
+        utils.log_event("Uruchomiono polecenie instalacyjne", title=self.command_title)
+        self["console"].setText("Przygotowanie instalacji…\n")
         self.console_app.execute(self.command)
 
     def on_console_data(self, data):
@@ -289,6 +313,16 @@ class OpkgCommandScreen(Screen):
 
     def on_command_finished(self, result):
         self.is_finished = True
+        output = self["console"].getText()
+        utils.log_event("Polecenie instalacyjne zakończone", title=self.command_title, result=result, output=output[-2000:])
+        if result:
+            utils.log_error(RuntimeError("Polecenie zakończone kodem %s" % result), "OpkgCommandScreen", title=self.command_title)
+        if result:
+            self["status"].setText("Instalacja zakończona błędem.")
+            self["key_hint"].setText("OK / EXIT — zamknij")
+        else:
+            self["status"].setText("Instalacja zakończona pomyślnie.")
+            self["key_hint"].setText("OK / EXIT — dalej")
         self.appendText("\n\nPolecenie zakończone.")
         if self.callback:
             callback = self.callback
@@ -473,6 +507,13 @@ class AzmanPanelMainScreen(Screen):
         Screen.__init__(self, session)
         self.session = session
         self.current_worker = None
+        self.update_worker = None
+        self.update_status = ""
+        self.available_panel_version = ""
+        self.available_package_updates = []
+        self.update_check_error = ""
+        self.info_subtab_index = 0
+        utils.log_event("Otwarto Azman Panel", version=constants.PLUGIN_VERSION)
         
         
         self.GRID_ROWS, self.GRID_COLS = 3, 4
@@ -497,10 +538,16 @@ class AzmanPanelMainScreen(Screen):
         self["description"] = Label("")
         self["selected_title"] = StaticText("")
         self["tabs"] = Label("")
+        for index in range(5):
+            self["tab_%d" % index] = Label("")
         self["plugin_info_title"] = Label("")
         self["plugin_info_version"] = Label("")
         self["plugin_info_desc"] = Label("")
         self["info_content"] = Label("")
+        self["info_tab_0"] = Label("")
+        self["info_tab_1"] = Label("")
+        self["info_separator_v"] = Label("")
+        self["info_separator_h"] = Label("")
         for r in range(self.GRID_ROWS):
             for c in range(self.GRID_WIDGET_COLS):
                 self[f"logo_{r}x{c}"], self[f"marker_{r}x{c}"] = Pixmap(), Pixmap()
@@ -513,18 +560,27 @@ class AzmanPanelMainScreen(Screen):
             ["OkCancelActions", "DirectionActions", "ColorActions"],
             {"ok": self.run_selected_item, "cancel": self.close,
              "up": lambda: self.move(-1, 0), "down": lambda: self.move(1, 0),
-             "left": lambda: self.move(0, -1), "right": lambda: self.move(0, 1),
+             "left": self.navigate_left, "right": self.navigate_right,
              "red": self.close, "green": self.install_selected, "yellow": self.previous_tab, "blue": self.next_tab}, -1)
         self.onLayoutFinish.append(self.prepare_menu)
         self.onClose.append(self.__onClose)
 
     def __onClose(self):
         if self.current_worker and self.current_worker.is_alive(): self.current_worker.cancel()
+        if self.update_worker and self.update_worker.is_alive(): self.update_worker.cancel()
         self.open_timer.stop()
+        utils.log_event("Zamknięto Azman Panel")
 
     def _load_icon(self, icon_name):
         path = f"{PLUGIN_PATH}/icons/{icon_name}"
-        return LoadPixmap(path) if os.path.exists(path) else LoadPixmap(f"{PLUGIN_PATH}/icons/icon_placeholder.png")
+        if not os.path.isfile(path):
+            utils.log_event("Brak ikony kafelka", icon=icon_name, path=path)
+            path = f"{PLUGIN_PATH}/icons/icon_placeholder.png"
+        pixmap = LoadPixmap(path)
+        if pixmap is None:
+            utils.log_event("Nie udało się wczytać ikony kafelka", icon=icon_name, path=path)
+            return LoadPixmap(f"{PLUGIN_PATH}/plugin.png")
+        return pixmap
 
     def prepare_menu(self):
         menu_definitions = [
@@ -579,6 +635,38 @@ class AzmanPanelMainScreen(Screen):
         self.all_menu_items = [{"text": t, "func": f, "pixmap": self._load_icon(i), "desc": d} for t, f, i, d in menu_definitions]
         self.apply_tab_filter()
         self.draw_page()
+        self.update_worker = ManifestUpdateCheckWorker(self._on_update_check_finished)
+        self.update_worker.start()
+
+    def _on_update_check_finished(self, error_message, panel_version, package_updates):
+        self.update_worker = None
+        self.available_panel_version = panel_version or ""
+        self.available_package_updates = package_updates or []
+        self.update_check_error = error_message or ""
+        if error_message:
+            self.update_status = "Nie udało się sprawdzić aktualizacji."
+            utils.log_event("Pominięto sprawdzenie aktualizacji", error=error_message)
+            if self.tabs[self.current_tab_index] == "Info":
+                self.show_info_subtab()
+            return
+        has_updates = bool(self.available_panel_version or self.available_package_updates)
+        self.update_status = "Dostępne aktualizacje." if has_updates else "Wszystkie zainstalowane elementy Azman są aktualne."
+        if has_updates:
+            self.current_tab_index = self.tabs.index("Info")
+            self.info_subtab_index = 1
+            self.apply_tab_filter()
+            self.draw_page()
+            self.session.open(
+                MessageBox,
+                "Dostępne są aktualizacje Azman.\n\nOtworzono kartę Aktualizacje.",
+                type=MessageBox.TYPE_INFO,
+                timeout=3,
+            )
+            return
+        if self.tabs[self.current_tab_index] == "Info":
+            self.show_info_subtab()
+        else:
+            self.update_selection()
 
 
     def get_item_category(self, item):
@@ -623,32 +711,21 @@ class AzmanPanelMainScreen(Screen):
             self.menu_items.sort(key=lambda item: order_map.get(item["text"], len(order_map)))
         if selected_tab == "Info":
             self.menu_items = []
-            python_version = runtime.get_runtime_info()["python"]
-            self["info_content"].setText(
-                "Azman Panel\n\n"
-                "Centralny panel instalacyjny i narzędziowy dla Enigma2.\n\n"
-                "Panel jest instalowany jako pierwszy plugin na dekoderze.\n"
-                "Z niego instalujesz pluginy Azman, bukiety, EPG, picony i inne narzędzia.\n\n"
-                "Środowisko Python dekodera: %s\n"
-                "Panel instaluje tylko paczki zgodne z tą wersją.\n\n"
-                "Wersja panelu: %s\n"
-                "Wersjonowanie: YYYY.MM.DD-HHMM\n\n"
-                "ZIELONY — włącz/wyłącz widoczność panelu w głównym menu Enigma2\n\n"
-                "Sterowanie:\n"
-                "OK — otwórz zaznaczony element\n"
-                "ZIELONY — instaluj zaznaczony plugin\n"
-                "ŻÓŁTY — poprzednia zakładka\n"
-                "NIEBIESKI — następna zakładka\n"
-                "CZERWONY — zamknij panel" % (python_version, constants.PLUGIN_VERSION)
-            )
-            self["info_content"].show()
-            self["key_green"].setText("Widocznosc menu")
+            self.show_info_subtab()
         else:
             self["info_content"].setText("")
             self["info_content"].hide()
+            self["info_tab_0"].hide()
+            self["info_tab_1"].hide()
+            self["info_separator_v"].hide()
+            self["info_separator_h"].hide()
+            self["key_green"].setText("Instaluj")
         self.GRID_ROWS = max(1, (len(self.menu_items) + self.GRID_COLS - 1) // self.GRID_COLS)
         self.selected_pos = (0, 0)
-        self["tabs"].setText("  |  ".join(("[%s]" % tab) if index == self.current_tab_index else tab for index, tab in enumerate(self.tabs)))
+        self["tabs"].setText("")
+        for index, tab in enumerate(self.tabs):
+            self["tab_%d" % index].setText(tab)
+            self["tab_%d" % index].instance.setForegroundColor(gRGB(0x39c0e0 if index == self.current_tab_index else 0xffffff))
 
     def next_tab(self):
         self.current_tab_index = (self.current_tab_index + 1) % len(self.tabs)
@@ -659,6 +736,62 @@ class AzmanPanelMainScreen(Screen):
         self.current_tab_index = (self.current_tab_index - 1) % len(self.tabs)
         self.apply_tab_filter()
         self.draw_page()
+
+    def navigate_left(self):
+        if self.tabs[self.current_tab_index] == "Info":
+            self.info_subtab_index = (self.info_subtab_index - 1) % 2
+            self.show_info_subtab()
+            return
+        self.move(0, -1)
+
+    def navigate_right(self):
+        if self.tabs[self.current_tab_index] == "Info":
+            self.info_subtab_index = (self.info_subtab_index + 1) % 2
+            self.show_info_subtab()
+            return
+        self.move(0, 1)
+
+    def show_info_subtab(self):
+        is_updates = self.info_subtab_index == 1
+        self["info_tab_0"].setText("[Informacje]" if not is_updates else "Informacje")
+        self["info_tab_1"].setText("[Aktualizacje]" if is_updates else "Aktualizacje")
+        self["info_tab_0"].instance.setForegroundColor(gRGB(0x39c0e0 if not is_updates else 0xffffff))
+        self["info_tab_1"].instance.setForegroundColor(gRGB(0x39c0e0 if is_updates else 0xffffff))
+        self["info_tab_0"].show()
+        self["info_tab_1"].show()
+        self["info_separator_v"].show()
+        self["info_separator_h"].show()
+        if not is_updates:
+            python_version = runtime.get_runtime_info()["python"]
+            self["info_content"].setText(
+                "Centralny panel instalacyjny i narzędziowy dla Enigma2.\n\n"
+                "Z niego instalujesz pluginy Azman, bukiety kanałów IPTV, EPG, picony i inne narzędzia z prywatnego, niepublicznego feeda autora.\n\n"
+                "Środowisko Python dekodera: %s\n"
+                "Panel instaluje tylko paczki zgodne z tą wersją.\n\n"
+                "ZIELONY — włącza lub wyłącza widoczność Panelu w głównym menu Enigma2.\n\n"
+                "W przypadku awarii Panelu lub błędów instalacji pluginów i narzędzi sprawdź log: /tmp/Azman_Panel.log\n\n"
+                "Interfejs Panelu jest projektowany dla skórek FHD (1920×1080). Na skórkach HD (1280×720) może wyglądać nieprawidłowo." % python_version
+            )
+            self["key_green"].setText("Widoczność menu")
+        elif self.update_check_error:
+            self["info_content"].setText("Sprawdzenie aktualizacji Azman\n\nNie udało się pobrać informacji o aktualizacjach.\n%s" % self.update_check_error)
+            self["key_green"].setText("Widoczność menu")
+        else:
+            lines = ["Sprawdzenie aktualizacji Azman", ""]
+            if self.update_worker:
+                lines.append("Trwa sprawdzanie wersji…")
+            else:
+                lines.append("Azman Panel: %s" % ("dostępna wersja %s" % self.available_panel_version if self.available_panel_version else "aktualny"))
+                if self.available_package_updates:
+                    lines.extend(["", "Aktualizacje pluginów:"])
+                    lines.extend("• %s: %s → %s" % item for item in self.available_package_updates)
+                else:
+                    lines.extend(["", "Pluginy Azman: aktualne"])
+                if self.available_panel_version:
+                    lines.extend(["", "ZIELONY — pobierz i zainstaluj aktualizację Azman Panel."])
+            self["info_content"].setText("\n".join(lines))
+            self["key_green"].setText("Aktualizuj Panel" if self.available_panel_version else "Widoczność menu")
+        self["info_content"].show()
         
     def draw_page(self):
         
@@ -694,9 +827,7 @@ class AzmanPanelMainScreen(Screen):
             self["description"].setText("")
             self["plugin_info_title"].setText(selected_item["text"])
             self["plugin_info_version"].setText("")
-            self["plugin_info_version"].setText("Wersja: dostępna w feedzie Azman")
             self["plugin_info_desc"].setText(selected_item["desc"])
-            self["plugin_info_version"].setText("")
         else:
             self["selected_title"].setText("")
             self["description"].setText("Brak elementów w tej kategorii.")
@@ -706,6 +837,15 @@ class AzmanPanelMainScreen(Screen):
 
     def install_selected(self):
         if self.tabs[self.current_tab_index] == "Info":
+            if self.info_subtab_index == 1 and self.available_panel_version:
+                self.session.openWithCallback(
+                    self._confirm_panel_self_update,
+                    MessageBox,
+                    "Dostępna jest wersja Azman Panel %s.\n\nCzy chcesz pobrać i zainstalować aktualizację?" % self.available_panel_version,
+                    type=MessageBox.TYPE_YESNO,
+                    default=True,
+                )
+                return
             self.toggle_main_menu_visibility()
             return
         item_index = self.selected_pos[0] * self.GRID_COLS + self.selected_pos[1]
@@ -739,6 +879,18 @@ class AzmanPanelMainScreen(Screen):
         keyword = item["text"].lower().replace(" ", "")
         self._open_package_manager("Instalowanie - " + item["text"], filter_keywords=[keyword])
 
+    def _confirm_panel_self_update(self, confirmed):
+        if not confirmed:
+            return
+        self._manifest_install_title = "Azman Panel"
+        self.current_worker = ManifestPackageDownloadWorker("azman-panel", self._on_manifest_package_ready)
+        self.download_messagebox = self.session.open(
+            MessageBox,
+            "Pobieranie i weryfikacja aktualizacji Azman Panel…",
+            type=MessageBox.TYPE_INFO,
+        )
+        self.current_worker.start()
+
     def toggle_main_menu_visibility(self):
         config.plugins.AzmanPanel.main_menu_visible.value = not config.plugins.AzmanPanel.main_menu_visible.value
         save_config()
@@ -768,6 +920,7 @@ class AzmanPanelMainScreen(Screen):
         item_index = self.selected_pos[0] * self.GRID_COLS + self.selected_pos[1]
         if item_index < len(self.menu_items):
             try:
+                utils.log_event("Wybrano funkcję panelu", item=self.menu_items[item_index]["text"], tab=self.tabs[self.current_tab_index])
                 self.menu_items[item_index]["func"]()
             except Exception as e:
                 utils.log_error(e, f"run_selected_item: {self.menu_items[item_index]['text']}")
@@ -1302,6 +1455,11 @@ class AzmanPanelMainScreen(Screen):
 
     def _on_manifest_package_ready(self, error_message, package_path):
         self.current_worker = None
+        utils.log_event(
+            "Zakończono przygotowanie pakietu",
+            package=getattr(self, "_manifest_install_title", "pakiet"),
+            success=not bool(error_message),
+        )
         if getattr(self, "download_messagebox", None):
             self.download_messagebox.close()
             self.download_messagebox = None
@@ -1327,9 +1485,11 @@ class AzmanPanelMainScreen(Screen):
         error_message, package_path = getattr(self, "_pending_manifest_result", (None, None))
         self._pending_manifest_result = None
         if error_message:
+            utils.log_error(RuntimeError(error_message), "przygotowanie pakietu", package=getattr(self, "_manifest_install_title", "pakiet"))
             self.session.open(MessageBox, "Nie udało się przygotować instalacji:\n%s" % error_message, type=MessageBox.TYPE_ERROR)
             return
         if not package_path or not os.path.isfile(package_path):
+            utils.log_error(RuntimeError("Brak pobranego pliku IPK"), "przygotowanie pakietu", package=getattr(self, "_manifest_install_title", "pakiet"))
             self.session.open(MessageBox, "Nie znaleziono pobranego pakietu.", type=MessageBox.TYPE_ERROR)
             return
         self._handle_install_with_restart(
@@ -1342,10 +1502,12 @@ class AzmanPanelMainScreen(Screen):
         try:
             if package_path and os.path.isfile(package_path):
                 os.unlink(package_path)
+                utils.log_event("Usunięto tymczasowy pakiet")
         except OSError as error:
             utils.log_error(error, "remove temporary package", path=package_path)
 
     def _handle_install_with_restart(self, title, command, callback=None):
+        utils.log_event("Przekazano pakiet do instalacji", title=title)
         self.session.open(
             OpkgCommandScreen, 
             title=title, 
