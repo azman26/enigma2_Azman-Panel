@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "repository": "Azman Feed",
-  "updated": "2026-08-11T01:07:00Z",
+  "updated": "2026-08-11T13:50:00Z",
   "packages": [
     {
       "id": "azman-panel",
       "name": "Azman Panel",
-      "version": "2026.08.11-0107",
+      "version": "2026.08.11-1547",
       "category": "system",
       "description": "Panel instalacyjny i narzędziowy ekosystemu Azman.",
       "python": ["3.12", "3.13", "3.14"],
@@ -14,9 +14,9 @@
       "package": "enigma2-plugin-extensions--azman-azmanpanel",
       "variants": {
         "all": {
-          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.08.11-0107_all.ipk",
-          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.08.11-0107/enigma2-plugin-extensions--azman-azmanpanel_2026.08.11-0107_all.ipk",
-          "sha256": "b57266441d97ae2f67b7a54c23926d317f05a26d6cd17b0f6e22b41853395302"
+          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.08.11-1547_all.ipk",
+          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.08.11-1547/enigma2-plugin-extensions--azman-azmanpanel_2026.08.11-1547_all.ipk",
+          "sha256": "da4c5bde1cb2737ca654cf247b79b7ddc144eefbd7eff3b2c7d8c5e8c0e65de4"
         }
       },
       "protected": false
@@ -24,7 +24,7 @@
     {
       "id": "monitoringburz",
       "name": "Monitor Burz",
-      "version": "2026.08.11-0107",
+      "version": "2026.08.11-1547",
       "category": "Pluginy",
       "description": "Bieżący podgląd wyładowań atmosferycznych i aktywności burzowej.",
       "python": ["3.13", "3.14"],
@@ -32,12 +32,12 @@
       "package": "enigma2-plugin-extensions--azman-monitoringburz",
       "variants": {
         "py313": {
-          "ipk": "py313/enigma2-plugin-extensions--azman-monitoringburz-py313_2026.08.11-0107_all.ipk",
-          "sha256": "3f5993805634c35c9eb9e4981b67d7e8dab136807a826d32b330bc92bb795342"
+          "ipk": "py313/enigma2-plugin-extensions--azman-monitoringburz-py313_2026.08.11-1547_all.ipk",
+          "sha256": "8e931447334d3ef380ae3f511ba0fa1b0b8a5a5cab515faeadb326cda4d60ee6"
         },
         "py314": {
-          "ipk": "py314/enigma2-plugin-extensions--azman-monitoringburz-py314_2026.08.11-0107_all.ipk",
-          "sha256": "deae80477898d43d98b6ebb6a604ecb6303d2de4fcdbc24d6abde2abf7c0c85f"
+          "ipk": "py314/enigma2-plugin-extensions--azman-monitoringburz-py314_2026.08.11-1547_all.ipk",
+          "sha256": "fd35efeca7c7eb47b459043b328a9269291b85213d6b6e70198c5a82f8c88b06"
         }
       },
       "protected": true
@@ -45,7 +45,7 @@
     {
       "id": "stacjameteommz",
       "name": "Stacja Meteo MMz",
-      "version": "2026.08.11-0107",
+      "version": "2026.08.11-1547",
       "category": "Pluginy",
       "description": "Szczegółowe dane pogodowe, astronomiczne oraz kartka z kalendarza.",
       "python": ["3.13", "3.14"],
@@ -53,12 +53,12 @@
       "package": "enigma2-plugin-extensions--azman-stacjameteommz",
       "variants": {
         "py313": {
-          "ipk": "py313/enigma2-plugin-extensions--azman-stacjameteommz-py313_2026.08.11-0107_all.ipk",
-          "sha256": "a7270e4a58ebab46dbab5671aa77df553639cd0a3e6704a4a523ccad99aa324f"
+          "ipk": "py313/enigma2-plugin-extensions--azman-stacjameteommz-py313_2026.08.11-1547_all.ipk",
+          "sha256": "28a9c07dc1a110429162e5816f268df25e7df9736e8617afd004a619a31d2ac5"
         },
         "py314": {
-          "ipk": "py314/enigma2-plugin-extensions--azman-stacjameteommz-py314_2026.08.11-0107_all.ipk",
-          "sha256": "2e5e7caf8104efa8afa0c452eacb84736357030f14cf9caf85b2b16f9c39f9a2"
+          "ipk": "py314/enigma2-plugin-extensions--azman-stacjameteommz-py314_2026.08.11-1547_all.ipk",
+          "sha256": "5a43f63a348dcacfa925977e79b38fefaef440bca92b2fa39794548a5c6e1d6f"
         }
       },
       "protected": true
@@ -66,7 +66,7 @@
     {
       "id": "imgwmeteo",
       "name": "IMGW Meteo",
-      "version": "2026.08.11-0107",
+      "version": "2026.08.11-1547",
       "category": "Pluginy",
       "description": "Prognoza pogody, mapy i ostrzeżenia IMGW.",
       "python": ["3.13", "3.14"],
@@ -74,12 +74,12 @@
       "package": "enigma2-plugin-extensions--azman-imgwmeteo",
       "variants": {
         "py313": {
-          "ipk": "py313/enigma2-plugin-extensions--azman-imgwmeteo-py313_2026.08.11-0107_all.ipk",
-          "sha256": "66432c014d166c0c97a08bcebc77c1e2c3d0038f76223b4efdb9fd5ec42a1e46"
+          "ipk": "py313/enigma2-plugin-extensions--azman-imgwmeteo-py313_2026.08.11-1547_all.ipk",
+          "sha256": "cc76a329f026fc190d50a1f9238eaa16b739b9f607ca5aed6a83b723c874dc5f"
         },
         "py314": {
-          "ipk": "py314/enigma2-plugin-extensions--azman-imgwmeteo-py314_2026.08.11-0107_all.ipk",
-          "sha256": "df590199a5d4bd56f7b7d8906951a35082b9506916dbbb683c1e660e161e1c07"
+          "ipk": "py314/enigma2-plugin-extensions--azman-imgwmeteo-py314_2026.08.11-1547_all.ipk",
+          "sha256": "0ed55ba48205e7c5e446659c830b78f9d251792a635b34f090936ef335465219"
         }
       },
       "protected": true
@@ -104,7 +104,7 @@
     {
       "id": "ytplaylistplayer",
       "name": "YT Playlist Player",
-      "version": "2026.08.11-0107",
+      "version": "2026.08.11-1547",
       "category": "Pluginy",
       "description": "Odtwarzanie własnych playlist, kanałów i transmisji YouTube.",
       "python": ["3.13", "3.14"],
@@ -112,12 +112,12 @@
       "package": "enigma2-plugin-extensions--azman-ytplaylistplayer",
       "variants": {
         "py313": {
-          "ipk": "py313/enigma2-plugin-extensions--azman-ytplaylistplayer-py313_2026.08.11-0107_all.ipk",
-          "sha256": "583b3abe7a44a0d7e24362767cb11eb1ec2ad94b34adfc1e8fee446f9609e704"
+          "ipk": "py313/enigma2-plugin-extensions--azman-ytplaylistplayer-py313_2026.08.11-1547_all.ipk",
+          "sha256": "e091400ca29e9a5ec12a811ad42727846ca63171146a225b9277bdad1d695131"
         },
         "py314": {
-          "ipk": "py314/enigma2-plugin-extensions--azman-ytplaylistplayer-py314_2026.08.11-0107_all.ipk",
-          "sha256": "8b7b3e3bc37aea391b59c9001b961a54d91b3d3cf93f8da89a80e32c29acb86b"
+          "ipk": "py314/enigma2-plugin-extensions--azman-ytplaylistplayer-py314_2026.08.11-1547_all.ipk",
+          "sha256": "e05cdb503de9cfe6fd370b6418e86a896ce69a944c28de409b05fd1b2660f46d"
         }
       },
       "protected": true
