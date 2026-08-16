@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "repository": "Azman Feed",
-  "updated": "2026-08-11T13:50:00Z",
+  "updated": "2026-08-16T16:18:43Z",
   "packages": [
     {
       "id": "azman-panel",
       "name": "Azman Panel",
-      "version": "2026.08.11-1547",
+      "version": "2026.08.16-1808",
       "category": "system",
       "description": "Panel instalacyjny i narzędziowy ekosystemu Azman.",
       "python": ["3.12", "3.13", "3.14"],
@@ -14,9 +14,9 @@
       "package": "enigma2-plugin-extensions--azman-azmanpanel",
       "variants": {
         "all": {
-          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.08.11-1547_all.ipk",
-          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.08.11-1547/enigma2-plugin-extensions--azman-azmanpanel_2026.08.11-1547_all.ipk",
-          "sha256": "da4c5bde1cb2737ca654cf247b79b7ddc144eefbd7eff3b2c7d8c5e8c0e65de4"
+          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.08.16-1808_all.ipk",
+          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.08.16-1808/enigma2-plugin-extensions--azman-azmanpanel_2026.08.16-1808_all.ipk",
+          "sha256": "5179fab886f5027acdf857c1f1d8b8ab6587ffd95d221445d23774783e27a86b"
         }
       },
       "protected": false
@@ -104,7 +104,7 @@
     {
       "id": "ytplaylistplayer",
       "name": "YT Playlist Player",
-      "version": "2026.08.11-1547",
+      "version": "2026.08.16-1808",
       "category": "Pluginy",
       "description": "Odtwarzanie własnych playlist, kanałów i transmisji YouTube.",
       "python": ["3.13", "3.14"],
@@ -112,12 +112,33 @@
       "package": "enigma2-plugin-extensions--azman-ytplaylistplayer",
       "variants": {
         "py313": {
-          "ipk": "py313/enigma2-plugin-extensions--azman-ytplaylistplayer-py313_2026.08.11-1547_all.ipk",
-          "sha256": "e091400ca29e9a5ec12a811ad42727846ca63171146a225b9277bdad1d695131"
+          "ipk": "py313/enigma2-plugin-extensions--azman-ytplaylistplayer-py313_2026.08.16-1808_all.ipk",
+          "sha256": "bd26af8f4e90a7445afe2bf39f8a16a741f184fbcf8d992d1dcf6be1ab3e2606"
         },
         "py314": {
-          "ipk": "py314/enigma2-plugin-extensions--azman-ytplaylistplayer-py314_2026.08.11-1547_all.ipk",
-          "sha256": "e05cdb503de9cfe6fd370b6418e86a896ce69a944c28de409b05fd1b2660f46d"
+          "ipk": "py314/enigma2-plugin-extensions--azman-ytplaylistplayer-py314_2026.08.16-1808_all.ipk",
+          "sha256": "45a20cc0197d2dbdbea601a480a454ee3240ba75ea28f2c1eeb9ff63cae1bef5"
+        }
+      },
+      "protected": true
+    },
+    {
+      "id": "karcherradiocontrol",
+      "name": "Karcher Radio Control",
+      "version": "2026.08.16-1808",
+      "category": "Pluginy",
+      "description": "Sterowanie odbiornikami Karcher opartymi na modułach Frontier Silicon.",
+      "python": ["3.13", "3.14"],
+      "architecture": ["all"],
+      "package": "enigma2-plugin-extensions--azman-karcherradiocontrol",
+      "variants": {
+        "py313": {
+          "ipk": "py313/enigma2-plugin-extensions--azman-karcherradiocontrol-py313_2026.08.16-1808_all.ipk",
+          "sha256": "da36111df664f1b7d2d67a1c575675cdd1b3b3e763908a2665a29fe9775f9607"
+        },
+        "py314": {
+          "ipk": "py314/enigma2-plugin-extensions--azman-karcherradiocontrol-py314_2026.08.16-1808_all.ipk",
+          "sha256": "9b59e02bae978ba00466e0a1d326b57030ee2492cce5e88f38e8fe2fcfd2eb2d"
         }
       },
       "protected": true
