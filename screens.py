@@ -586,7 +586,7 @@ class AzmanPanelMainScreen(Screen):
         menu_definitions = [
             
             ("Azman Player", lambda: self.show_coming_soon("Azman Player"), "icon_azmanplayer.png", "Odtwarzacz i centrum kana\u0142\u00f3w Azman - telewizja, radio i zarz\u0105dzanie \u017ar\u00f3d\u0142ami w jednym miejscu."),
-            ("Stacja Meteo MMz", self.start_stacjameteommz_install, "icon_stacjameteommz.png", "Szczeg\u00f3\u0142owe dane pogodowe, wiatr, opady, jako\u015b\u0107 powietrza i astronomia.\nKartka z kalendarza: imieniny, \u015bwi\u0119ta, przys\u0142owie, cytat dnia, porady ogrodnicze, wp\u0142yw Ksi\u0119\u017cyca i biorytm."),
+            ("Stacja Meteo MMz", self.start_stacjameteommz_install, "icon_stacjameteommz.png", "Szczeg\u00f3\u0142owe dane pogodowe, wiatr, opady, jako\u015b\u0107 powietrza i astronomia. Lokalne dane meteo dla miasta Mi\u0144sk Maz.\nKartka z kalendarza: imieniny, \u015bwi\u0119ta, przys\u0142owie, cytat dnia, porady ogrodnicze, wp\u0142yw Ksi\u0119\u017cyca i biorytm."),
             
             ("Bukiety IPTV PL", self.open_iptv_bouquet_manager, "icon_iptv_pl.png", "Polskie kana\u0142y IPTV uporz\u0105dkowane w gotowych bukietach Enigma2."),
             ("Bukiety FAST", lambda: self.show_coming_soon("Bukiety FAST"), "icon_fast.png", "Gotowe bukiety kana\u0142\u00f3w FAST - funkcja zostanie udost\u0119pniona wkr\u00f3tce."),
@@ -600,12 +600,10 @@ class AzmanPanelMainScreen(Screen):
             ("Polskie \u017ar\u00f3d\u0142a EPG", lambda: self.show_coming_soon("Polskie zrodla EPG"), "icon_epg.png", "Polskie \u017ar\u00f3d\u0142a programu TV dla EPG Import - funkcja zostanie udost\u0119pniona wkr\u00f3tce."),
             ("IPTV.ORG", self.start_iptv_org_install, "icon_iptvorg.png", "Tworzy aktualny bukiet polskich kana\u0142\u00f3w z publicznej listy IPTV.ORG."),
             ("Picons", self.open_picon_manager, "icon_picons.png", "Pobieranie i instalacja picon\u00f3w kana\u0142\u00f3w do wybranej lokalizacji na dekoderze."),
-            ("Karcher Radio Control", lambda: self.show_coming_soon("Karcher Radio Control"), "icon_karcherradiocontrol.png", "Sterowanie radiem Karcher, szybki dost\u0119p do jego funkcji oraz odczyt RDS aktualnie granej stacji."),
-            ("YT Playlist Player", self.start_ytplaylistplayer_install, "icon_ytplaylistplayer.png", "Wygodne odtwarzanie w\u0142asnych playlist YouTube na ekranie Enigma2."),
+            ("Karcher Radio Control", self.start_karcherradiocontrol_install, "icon_karcherradiocontrol.png", "Sterowanie radiem Karcher, szybki dost\u0119p do jego funkcji oraz odczyt RDS aktualnie granej stacji.\nObs\u0142uga odbiornik\u00f3w opartych na modu\u0142ach Frontier Silicon."),
+            ("YT Playlist Player", self.start_ytplaylistplayer_install, "icon_ytplaylistplayer.png", "Wygodne odtwarzanie w\u0142asnych Playlist, materia\u0142\u00f3w z zak\u0142adki Wideo oraz kana\u0142\u00f3w Live na ekranie Enigma2. Wymagany zainstalowany python3-yt-dlp."),
             ("Monitor Burz", self.start_monitoringburz_install, "icon_monitoringburz.png", "Bie\u017c\u0105cy podgl\u0105d wy\u0142adowa\u0144 atmosferycznych i aktywno\u015bci burzowej."),
-            ("Kalendarz Ogrodnika", self.show_work_in_progress, "icon_kalendarzogrod.png", "Kalendarz, porady ogrodnicze, fazy Ksi\u0119\u017cyca i informacje pomocne w planowaniu prac."),
-            
-            ("IMGW Meteo", self.start_imgwmeteo_install, "icon_imgwmeteo.png", "Aktualna pogoda IMGW, mapy, prognozy i ostrze\u017cenia dla zapisanych lokalizacji."),
+            ("IMGW Meteo", self.start_imgwmeteo_install, "icon_imgwmeteo.png", "Aktualna pogoda IMGW, mapy, prognozy i ostrze\u017cenia dla zapisanych lokalizacji. Dane meteo z portalu meteo.imgw.pl."),
             ("Shelly Control", self.show_work_in_progress, "icon_shellycontrolcenter.png", "Sterowanie urz\u0105dzeniami Shelly bezpo\u015brednio z dekodera oraz odczyt danych urz\u0105dze\u0144 w czasie rzeczywistym."),
             ("MiHome Control", self.show_work_in_progress, "icon_mihomecontrol.png", "Obs\u0142uga wybranych urz\u0105dze\u0144 Xiaomi Mi Home. Obecnie odczyt i sterowanie Xiaomi Mi Purifier oraz Mi Box S."),
             ("Archiv CZSK", self.start_archivczsk_install, "icon_archivczsk.png", "Odtwarzanie tre\u015bci wideo i archiw\u00f3w czesko-s\u0142owackich w Enigma2."),
@@ -617,7 +615,7 @@ class AzmanPanelMainScreen(Screen):
         
         coming_soon_names = (
             "Bukiety FAST", "Polskie \u017ar\xf3d\u0142a EPG", "Azman Player",
-            "Shelly Control", "MiHome Control", "Karcher Radio Control", "Kalendarz Ogrodnika",
+            "Shelly Control", "MiHome Control",
         )
         menu_definitions = [
             (text, (lambda name=text: self.show_coming_soon(name)) if text in coming_soon_names else func, icon, description)
@@ -679,7 +677,7 @@ class AzmanPanelMainScreen(Screen):
         tool_names = ("Archiv CZSK", "AjPanel", "Dodatki do E2K", "M3UIPTV", "Airly", "Aktualizacja satellites.xml")
         if text in tool_names:
             return "Narzędzia/Inne wtyczki"
-        plugin_names = ("Azman Player", "Stacja Meteo MMz", "IMGW Meteo", "Shelly Control", "Karcher Radio Control", "MiHome Control", "YT Playlist Player", "Monitor Burz", "Kalendarz Ogrodnika")
+        plugin_names = ("Azman Player", "Stacja Meteo MMz", "IMGW Meteo", "Shelly Control", "Karcher Radio Control", "MiHome Control", "YT Playlist Player", "Monitor Burz")
         if text in plugin_names:
             return "Pluginy"
         if text == "M3UIPTV":
@@ -692,8 +690,7 @@ class AzmanPanelMainScreen(Screen):
         if selected_tab == "Pluginy":
             plugin_order = (
                 "Azman Player", "YT Playlist Player", "IMGW Meteo", "Stacja Meteo MMz",
-                "Monitor Burz", "Shelly Control", "MiHome Control", "Karcher Radio Control",
-                "Kalendarz Ogrodnika"
+                "Monitor Burz", "Shelly Control", "MiHome Control", "Karcher Radio Control"
             )
             order_map = {name: index for index, name in enumerate(plugin_order)}
             self.menu_items.sort(key=lambda item: order_map.get(item["text"], len(order_map)))
@@ -854,7 +851,7 @@ class AzmanPanelMainScreen(Screen):
         item = self.menu_items[item_index]
         coming_soon_names = (
             "Bukiety FAST", "Polskie \u017ar\xf3d\u0142a EPG", "Azman Player",
-            "Shelly Control", "MiHome Control", "Karcher Radio Control", "Kalendarz Ogrodnika",
+            "Shelly Control", "MiHome Control",
         )
         if item["text"] in coming_soon_names:
             self.show_coming_soon(item["text"])
@@ -875,6 +872,9 @@ class AzmanPanelMainScreen(Screen):
             return
         if item["text"] == "YT Playlist Player":
             self.start_ytplaylistplayer_install()
+            return
+        if item["text"] == "Karcher Radio Control":
+            self.start_karcherradiocontrol_install()
             return
         keyword = item["text"].lower().replace(" ", "")
         self._open_package_manager("Instalowanie - " + item["text"], filter_keywords=[keyword])
@@ -1420,6 +1420,31 @@ class AzmanPanelMainScreen(Screen):
         self._manifest_install_title = "YT Playlist Player"
         self.current_worker = ManifestPackageDownloadWorker(
             "ytplaylistplayer", self._on_manifest_package_ready
+        )
+        self.download_messagebox = self.session.open(
+            MessageBox,
+            "Pobieranie i weryfikacja pakietu...",
+            type=MessageBox.TYPE_INFO
+        )
+        self.current_worker.start()
+
+    def start_karcherradiocontrol_install(self):
+        message = (
+            "Karcher Radio Control jest pobierany z prywatnego, niepublicznego feeda autora.\n\n"
+            "Pobrany pakiet zostanie sprawdzony przez SHA-256 przed instalacją.\n\n"
+            "Czy chcesz kontynuować?"
+        )
+        self.session.openWithCallback(
+            self._confirm_karcherradiocontrol_install,
+            MessageBox, message, MessageBox.TYPE_YESNO, default=True
+        )
+
+    def _confirm_karcherradiocontrol_install(self, confirmed):
+        if not confirmed:
+            return
+        self._manifest_install_title = "Karcher Radio Control"
+        self.current_worker = ManifestPackageDownloadWorker(
+            "karcherradiocontrol", self._on_manifest_package_ready
         )
         self.download_messagebox = self.session.open(
             MessageBox,

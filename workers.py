@@ -271,6 +271,26 @@ class ManifestUpdateCheckWorker(BaseWorker):
                 installed[package.strip()] = version.strip()
         return installed
 
+    @staticmethod
+    def _entry_package_names(entry):
+        names = set()
+        package = str(entry.get("package") or "").strip()
+        if package:
+            names.add(package)
+        for variant in (entry.get("variants") or {}).values():
+            filename = os.path.basename(str(variant.get("ipk") or ""))
+            if filename.count("_") >= 2:
+                names.add(filename.rsplit("_", 2)[0])
+        return names
+
+    def _installed_entry_version(self, entry, installed):
+        versions = []
+        for package_name in self._entry_package_names(entry):
+            version = installed.get(package_name)
+            if version:
+                versions.append(version)
+        return max(versions, key=self._version_key) if versions else ""
+
     def run(self):
         try:
             request = urllib.request.Request(constants.AZMAN_MANIFEST_URL, headers={"User-Agent": "AzmanPanel/1.0"})
@@ -284,7 +304,7 @@ class ManifestUpdateCheckWorker(BaseWorker):
                 remote_version = str(entry.get("version") or "")
                 if not package or not remote_version:
                     continue
-                local_version = constants.PLUGIN_VERSION if entry.get("id") == "azman-panel" else installed.get(package)
+                local_version = constants.PLUGIN_VERSION if entry.get("id") == "azman-panel" else self._installed_entry_version(entry, installed)
                 if not local_version or self._version_key(remote_version) <= self._version_key(local_version):
                     continue
                 name = str(entry.get("name") or entry.get("id") or package)
