@@ -19,7 +19,7 @@ from enigma import eTimer, eConsoleAppContainer, gRGB
 
 from . import constants, runtime, utils
 from .azman_ui import load_responsive_skin
-from .workers import PiconZipListWorker, PiconInstallationWorker, PrivateBouquetListWorker, PrivateBouquetInstallWorker, IptvBouquetUninstallWorker, IptvOrgWorker, MyRadioOnlineBouquetWorker, PolskieRadioBouquetWorker, RmfonBouquetWorker, EurozetBouquetWorker, PackageListWorker, ManifestPackageDownloadWorker, ManifestUpdateCheckWorker, SatellitesXmlUpdateWorker
+from .workers import PiconZipListWorker, PiconInstallationWorker, PrivateBouquetListWorker, PrivateBouquetInstallWorker, IptvBouquetUninstallWorker, IptvOrgWorker, LgChannelsPlBouquetWorker, MyRadioOnlineBouquetWorker, PolskieRadioBouquetWorker, RmfonBouquetWorker, EurozetBouquetWorker, PackageListWorker, ManifestPackageDownloadWorker, ManifestUpdateCheckWorker, SatellitesXmlUpdateWorker
 from .config import config, save_config
 
 PLUGIN_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -585,12 +585,13 @@ class AzmanPanelMainScreen(Screen):
     def prepare_menu(self):
         menu_definitions = [
             
-            ("Azman Player", lambda: self.show_coming_soon("Azman Player"), "icon_azmanplayer.png", "Odtwarzacz i centrum kana\u0142\u00f3w Azman - telewizja, radio i zarz\u0105dzanie \u017ar\u00f3d\u0142ami w jednym miejscu."),
+            ("FreeTV Player", self.start_freetvplayer_install, "icon_freetv_player.png", "Odtwarzacz bezpłatnych kanałów internetowych. Umożliwia generowanie bukietów Enigma2 dla dostępnych providerów i odtwarzanie ich przez lokalne proxy HLS/TS. Na niektórych serwisach jest wymagane założenie darmowego konta bez wykupionych subskrypcji."),
             ("Stacja Meteo MMz", self.start_stacjameteommz_install, "icon_stacjameteommz.png", "Szczeg\u00f3\u0142owe dane pogodowe, wiatr, opady, jako\u015b\u0107 powietrza i astronomia. Lokalne dane meteo dla miasta Mi\u0144sk Maz.\nKartka z kalendarza: imieniny, \u015bwi\u0119ta, przys\u0142owie, cytat dnia, porady ogrodnicze, wp\u0142yw Ksi\u0119\u017cyca i biorytm."),
             
             ("Bukiety IPTV PL", self.open_iptv_bouquet_manager, "icon_iptv_pl.png", "Polskie kana\u0142y IPTV uporz\u0105dkowane w gotowych bukietach Enigma2."),
             ("Bukiety FAST", lambda: self.show_coming_soon("Bukiety FAST"), "icon_fast.png", "Gotowe bukiety kana\u0142\u00f3w FAST - funkcja zostanie udost\u0119pniona wkr\u00f3tce."),
             ("MyRadioOnline", self.start_myradioonline_bouquet, "icon_myradioonline.png", "Tworzy bukiet polskich i zagranicznych stacji radiowych MyRadioOnline."),
+            ("LG Channels PL", self.start_lgchannelspl_bouquet, "icon_lgchannels.png", "Tworzy aktualny bukiet bezp\u0142atnych kana\u0142\u00f3w LG Channels Polska."),
             ("Polskie Radio", self.start_polskieradio_bouquet, "icon_polskieradio.png", "Tworzy bukiet stacji Polskiego Radia wraz z kana\u0142ami tematycznymi i regionalnymi."),
             ("RMF ON", self.start_rmfon_bouquet, "icon_rmfon.png", "Tworzy bukiet stacji radiowych dost\u0119pnych w serwisie RMF ON."),
             ("Eurozet", self.start_eurozet_bouquet, "icon_eurozet.png", "Tworzy bukiet stacji grupy Eurozet, m.in. Radio ZET, Antyradio i Meloradio."),
@@ -614,7 +615,7 @@ class AzmanPanelMainScreen(Screen):
         ]
         
         coming_soon_names = (
-            "Bukiety FAST", "Polskie \u017ar\xf3d\u0142a EPG", "Azman Player",
+            "Bukiety FAST", "Polskie \u017ar\xf3d\u0142a EPG",
             "Shelly Control", "MiHome Control",
         )
         menu_definitions = [
@@ -671,13 +672,13 @@ class AzmanPanelMainScreen(Screen):
         text = item["text"]
         if "EPG" in text or text == "Picons":
             return "EPG/Picony"
-        channel_names = ("Bukiety IPTV PL", "Bukiety FAST", "IPTV.ORG", "MyRadioOnline", "Polskie Radio", "RMF ON", "Eurozet")
+        channel_names = ("Bukiety IPTV PL", "Bukiety FAST", "IPTV.ORG", "LG Channels PL", "MyRadioOnline", "Polskie Radio", "RMF ON", "Eurozet")
         if text in channel_names:
             return "Bukiety/Listy kanałów"
         tool_names = ("Archiv CZSK", "AjPanel", "Dodatki do E2K", "M3UIPTV", "Airly", "Aktualizacja satellites.xml")
         if text in tool_names:
             return "Narzędzia/Inne wtyczki"
-        plugin_names = ("Azman Player", "Stacja Meteo MMz", "IMGW Meteo", "Shelly Control", "Karcher Radio Control", "MiHome Control", "YT Playlist Player", "Monitor Burz")
+        plugin_names = ("FreeTV Player", "Stacja Meteo MMz", "IMGW Meteo", "Shelly Control", "Karcher Radio Control", "MiHome Control", "YT Playlist Player", "Monitor Burz")
         if text in plugin_names:
             return "Pluginy"
         if text == "M3UIPTV":
@@ -689,7 +690,7 @@ class AzmanPanelMainScreen(Screen):
         self.menu_items = [item for item in self.all_menu_items if self.get_item_category(item) == selected_tab]
         if selected_tab == "Pluginy":
             plugin_order = (
-                "Azman Player", "YT Playlist Player", "IMGW Meteo", "Stacja Meteo MMz",
+                "FreeTV Player", "YT Playlist Player", "IMGW Meteo", "Stacja Meteo MMz",
                 "Monitor Burz", "Shelly Control", "MiHome Control", "Karcher Radio Control"
             )
             order_map = {name: index for index, name in enumerate(plugin_order)}
@@ -699,7 +700,7 @@ class AzmanPanelMainScreen(Screen):
             order_map = {name: index for index, name in enumerate(order)}
             self.menu_items.sort(key=lambda item: order_map.get(item["text"], len(order_map)))
         elif selected_tab == "Bukiety/Listy kanałów":
-            order = ("Bukiety IPTV PL", "Bukiety FAST", "IPTV.ORG", "MyRadioOnline", "RMF ON", "Polskie Radio", "Eurozet")
+            order = ("Bukiety IPTV PL", "Bukiety FAST", "LG Channels PL", "IPTV.ORG", "MyRadioOnline", "RMF ON", "Polskie Radio", "Eurozet")
             order_map = {name: index for index, name in enumerate(order)}
             self.menu_items.sort(key=lambda item: order_map.get(item["text"], len(order_map)))
         elif selected_tab == "Narzędzia/Inne wtyczki":
@@ -850,7 +851,7 @@ class AzmanPanelMainScreen(Screen):
             return
         item = self.menu_items[item_index]
         coming_soon_names = (
-            "Bukiety FAST", "Polskie \u017ar\xf3d\u0142a EPG", "Azman Player",
+            "Bukiety FAST", "Polskie \u017ar\xf3d\u0142a EPG",
             "Shelly Control", "MiHome Control",
         )
         if item["text"] in coming_soon_names:
@@ -869,6 +870,9 @@ class AzmanPanelMainScreen(Screen):
             return
         if item["text"] == "IMGW Meteo":
             self.start_imgwmeteo_install()
+            return
+        if item["text"] == "FreeTV Player":
+            self.start_freetvplayer_install()
             return
         if item["text"] == "YT Playlist Player":
             self.start_ytplaylistplayer_install()
@@ -1128,6 +1132,19 @@ class AzmanPanelMainScreen(Screen):
             default=True,
         )
 
+    def start_lgchannelspl_bouquet(self):
+        self.session.openWithCallback(
+            self._confirm_lgchannelspl_bouquet,
+            MessageBox,
+            "Pobrać aktualną listę LG Channels PL i utworzyć bukiet kanałów?",
+            MessageBox.TYPE_YESNO,
+            default=True,
+        )
+
+    def _confirm_lgchannelspl_bouquet(self, confirmed):
+        if confirmed:
+            self._defer_action(lambda: self._start_radio_bouquet("LG Channels PL", LgChannelsPlBouquetWorker))
+
     def _confirm_myradioonline_bouquet(self, confirmed):
         if not confirmed:
             return
@@ -1244,6 +1261,24 @@ class AzmanPanelMainScreen(Screen):
                 self.progress_screen.close()
             self.open_iptv_bouquet_manager()
         self.session.openWithCallback(after_messagebox_callback, MessageBox, final_message, type=MessageBox.TYPE_INFO)
+
+    def _runtime_package_is_installed(self, package_base):
+        runtime_info = runtime.get_runtime_info()
+        package_name = "%s-py%s%s" % (
+            package_base, runtime_info["python_major"], runtime_info["python_minor"]
+        )
+        try:
+            installed = subprocess.run(
+                ["opkg", "list-installed"], stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, timeout=15, check=False
+            ).stdout.decode("utf-8", errors="ignore")
+        except Exception as error:
+            utils.log_error(error, "sprawdzanie zainstalowanego pakietu", package=package_name)
+            return False
+        return any(
+            line.startswith(package_name + " ") or line.startswith(package_name + " -")
+            for line in installed.splitlines()
+        )
 
         
         
@@ -1401,7 +1436,64 @@ class AzmanPanelMainScreen(Screen):
         )
         self.current_worker.start()
 
+    def start_freetvplayer_install(self):
+        if self._runtime_package_is_installed("enigma2-plugin-extensions--azman-freetvplayer"):
+            self.session.openWithCallback(
+                self._confirm_freetvplayer_reinstall,
+                MessageBox,
+                "FreeTV Player jest już zainstalowany.\n\nCzy chcesz go przeinstalować?",
+                MessageBox.TYPE_YESNO,
+                default=False
+            )
+            return
+        self._begin_freetvplayer_download()
+
+    def _confirm_freetvplayer_reinstall(self, confirmed):
+        if confirmed:
+            self._begin_freetvplayer_download()
+
+    def _begin_freetvplayer_download(self):
+        message = (
+            "FreeTV Player jest pobierany z prywatnego, niepublicznego feeda autora.\n\n"
+            "Pobrany pakiet zostanie sprawdzony przez SHA-256 przed instalacją.\n\n"
+            "Czy chcesz kontynuować?"
+        )
+        self.session.openWithCallback(
+            self._confirm_freetvplayer_install,
+            MessageBox, message, MessageBox.TYPE_YESNO, default=True
+        )
+
+    def _confirm_freetvplayer_install(self, confirmed):
+        if not confirmed:
+            return
+        self._manifest_install_title = "FreeTV Player"
+        self.current_worker = ManifestPackageDownloadWorker(
+            "freetvplayer", self._on_manifest_package_ready
+        )
+        self.download_messagebox = self.session.open(
+            MessageBox,
+            "Pobieranie i weryfikacja pakietu...",
+            type=MessageBox.TYPE_INFO
+        )
+        self.current_worker.start()
+
     def start_ytplaylistplayer_install(self):
+        if self._runtime_package_is_installed("enigma2-plugin-extensions--azman-ytplaylistplayer"):
+            self.session.openWithCallback(
+                self._confirm_ytplaylistplayer_reinstall,
+                MessageBox,
+                "YT Playlist Player jest już zainstalowany.\n\nCzy chcesz go przeinstalować?",
+                MessageBox.TYPE_YESNO,
+                default=False
+            )
+            return
+        self._begin_ytplaylistplayer_download()
+
+    def _confirm_ytplaylistplayer_reinstall(self, confirmed):
+        if confirmed:
+            self._begin_ytplaylistplayer_download()
+
+    def _begin_ytplaylistplayer_download(self):
         message = (
             "YT Playlist Player jest pobierany z prywatnego, niepublicznego feeda autora.\n\n"
             "Wymagana biblioteka: python3-yt-dlp.\n"
@@ -1429,6 +1521,22 @@ class AzmanPanelMainScreen(Screen):
         self.current_worker.start()
 
     def start_karcherradiocontrol_install(self):
+        if self._runtime_package_is_installed("enigma2-plugin-extensions--azman-karcherradiocontrol"):
+            self.session.openWithCallback(
+                self._confirm_karcherradiocontrol_reinstall,
+                MessageBox,
+                "Karcher Radio Control jest już zainstalowany.\n\nCzy chcesz go przeinstalować?",
+                MessageBox.TYPE_YESNO,
+                default=False
+            )
+            return
+        self._begin_karcherradiocontrol_download()
+
+    def _confirm_karcherradiocontrol_reinstall(self, confirmed):
+        if confirmed:
+            self._begin_karcherradiocontrol_download()
+
+    def _begin_karcherradiocontrol_download(self):
         message = (
             "Karcher Radio Control jest pobierany z prywatnego, niepublicznego feeda autora.\n\n"
             "Pobrany pakiet zostanie sprawdzony przez SHA-256 przed instalacją.\n\n"

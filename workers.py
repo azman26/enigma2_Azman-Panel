@@ -651,6 +651,7 @@ class MyRadioOnlineBouquetWorker(BaseWorker):
                 payload = json.loads(response.read().decode("utf-8"))
             radios = payload.get("radios") if isinstance(payload, dict) else []
             epg_mapper = PanelEpgMapper()
+            epg_mapper.prefetch([radio.get("r_name") for radio in radios if isinstance(radio, dict)])
             lines = ["#NAME MyRadioOnline (azman)\n"]
             seen = set()
             count = 0
@@ -714,6 +715,7 @@ class PolskieRadioBouquetWorker(BaseWorker):
         bouquets_tv_path = "/etc/enigma2/bouquets.tv"
         try:
             epg_mapper = PanelEpgMapper()
+            epg_mapper.prefetch([name for name, _stream_url in constants.POLSKIE_RADIO_STREAMS])
             lines = ["#NAME Polskie Radio (azman)\n"]
             for name, stream_url in constants.POLSKIE_RADIO_STREAMS:
                 safe_name = re.sub(r"[\r\n:]", " ", name).strip()
@@ -749,6 +751,7 @@ class _RadioApiBouquetWorker(BaseWorker):
         path = os.path.join("/etc/enigma2", filename)
         lines = ["#NAME %s (azman)\n" % title]
         mapper = PanelEpgMapper()
+        mapper.prefetch([name for name, _url in stations])
         for name, url in stations:
             name = re.sub(r"[\r\n:]", " ", str(name)).strip()
             encoded = urllib.parse.quote(str(url), safe="")
@@ -819,6 +822,104 @@ class EurozetBouquetWorker(_RadioApiBouquetWorker):
             self.error_message = "Nie udało się utworzyć bukietu Eurozet:\n%s" % error
         finally:
             if not self._is_cancelled: self._safe_call_main_thread(getattr(self, "error_message", None), getattr(self, "final_message", None))
+
+
+class LgChannelsPlBouquetWorker(BaseWorker):
+    def __init__(self, callback_finished):
+        super(LgChannelsPlBouquetWorker, self).__init__(callback_finished)
+        self.error_message = None
+        self.final_message = None
+
+    def _attribute(self, line, name):
+        match = re.search(r'(?:^|\s)%s="([^"]*)"' % re.escape(name), line)
+        return match.group(1).strip() if match else ""
+
+    def _prepare_url(self, url):
+        values = {
+            "APP_BUNDLE": "pl.azman.panel",
+            "APP_NAME": "Azman Panel",
+            "APP_VERSION": "1.0",
+            "COUNTRY": "PL",
+            "DEVICE_ID": "00000000-0000-0000-0000-000000000000",
+            "DEVICE_MAKE": "Enigma2",
+            "DEVICE_MODEL": "Linux STB",
+            "DEVICE_TYPE": "connected_tv",
+            "GDPR": "1",
+            "TARGETAD_ALLOWED": "0",
+            "UA": "Mozilla/5.0 (X11; Linux armv7l) AzmanPanel/1.0",
+            "VIEWSIZE": "1920x1080",
+        }
+        prepared = str(url).strip()
+        for name, value in values.items():
+            prepared = prepared.replace("[%s]" % name, urllib.parse.quote(value, safe=""))
+        return re.sub(r"\[[A-Z0-9_]+\]", "", prepared)
+
+    def run(self):
+        bouquet_filepath = os.path.join("/etc/enigma2", constants.LGCHANNELSPL_BOUQUET_FILENAME)
+        bouquets_tv_path = "/etc/enigma2/bouquets.tv"
+        try:
+            request = urllib.request.Request(constants.LGCHANNELSPL_PLAYLIST_URL, headers={
+                "User-Agent": "Mozilla/5.0 (X11; Linux armv7l) AzmanPanel/1.0",
+                "Accept": "audio/mpegurl, application/vnd.apple.mpegurl, text/plain, */*",
+                "Referer": "https://www.apsattv.com/streams.html",
+            })
+            with urllib.request.urlopen(request, timeout=30) as response:
+                content = response.read().decode("utf-8-sig", errors="replace")
+            if not content.lstrip().startswith("#EXTM3U"):
+                raise ValueError("Pobrana lista LG Channels PL ma nieprawidłowy format.")
+            lines = ["#NAME LG Channels PL (azman)\n"]
+            metadata = None
+            seen_urls = set()
+            count = 0
+            for raw_line in content.splitlines():
+                line = raw_line.strip()
+                if not line:
+                    continue
+                if line.startswith("#EXTINF"):
+                    metadata = line
+                    continue
+                if line.startswith("#"):
+                    continue
+                if metadata is None or not line.startswith(("http://", "https://")):
+                    metadata = None
+                    continue
+                stream_url = self._prepare_url(line)
+                if ".m3u8" not in stream_url.lower() or stream_url in seen_urls:
+                    metadata = None
+                    continue
+                seen_urls.add(stream_url)
+                name = metadata.rsplit(",", 1)[-1].strip() or "LG Channels"
+                name = re.sub(r"^\d+\s+", "", name).replace(":", " ").replace("\n", " ")
+                encoded_url = urllib.parse.quote(stream_url, safe="")
+                lines.append("#SERVICE 4097:0:1:0:0:0:0:0:0:0:%s:%s\n" % (encoded_url, name))
+                lines.append("#DESCRIPTION %s\n" % name)
+                count += 1
+                metadata = None
+            if self._is_cancelled:
+                raise InterruptedError()
+            if count == 0:
+                raise ValueError("Nie znaleziono kanałów HLS na liście LG Channels PL.")
+            utils.atomic_write_lines(bouquet_filepath, lines)
+            utils.remove_bouquet_and_registration("/etc/enigma2", "userbouquet.azmanplayer_lgchannelspl.tv")
+            existing = []
+            if os.path.exists(bouquets_tv_path):
+                with open(bouquets_tv_path, "r") as handle:
+                    existing = handle.readlines()
+            if not any(constants.LGCHANNELSPL_BOUQUET_FILENAME in line for line in existing):
+                existing.append('#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet\n' % constants.LGCHANNELSPL_BOUQUET_FILENAME)
+                utils.atomic_write_lines(bouquets_tv_path, existing)
+            db = eDVBDB.getInstance()
+            db.reloadBouquets()
+            db.reloadServicelist()
+            self.final_message = "Utworzono bukiet LG Channels PL.\n\nDodano %d kanałów." % count
+        except InterruptedError:
+            self.error_message = "Operacja anulowana przez użytkownika."
+        except Exception as error:
+            utils.log_error(error, self.__class__.__name__, url=constants.LGCHANNELSPL_PLAYLIST_URL, target=bouquet_filepath)
+            self.error_message = "Nie udało się utworzyć bukietu LG Channels PL:\n%s" % error
+        finally:
+            if not self._is_cancelled:
+                self._safe_call_main_thread(self.error_message, self.final_message)
 
 
 class IptvOrgWorker(BaseWorker):

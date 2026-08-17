@@ -27,6 +27,18 @@ class PanelEpgMapper(object):
     def available(self):
         return self.private_api.enabled()
 
+    def prefetch(self, names):
+        candidates = []
+        for name in names or []:
+            text = str(name or "").strip()
+            if not text:
+                continue
+            candidates.append(text)
+            if not text.lower().endswith(".pl"):
+                candidates.append(text + ".pl")
+            candidates.extend(("Polskie Radio " + text, "PolskieRadio" + text))
+        self.private_api.resolve(candidates)
+
     def reference(self, name):
         text = str(name or "").strip()
         candidates = [text]
