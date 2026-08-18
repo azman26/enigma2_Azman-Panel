@@ -1,6 +1,6 @@
 {
   "enabled": false,
-  "url": "https://www.topolowa4.pl/api/epg-map.php",
+  "url": "",
   "token": "",
   "box_id": "",
   "timeout": 12

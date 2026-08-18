@@ -109,11 +109,14 @@
         <widget name="progress" position="15,102" size="1170,27" />
         <widget name="progresstext" position="15,144" size="1170,48" font="Regular;30" halign="center" foregroundColor="#cccccc" transparent="1" />
     </screen>
-    <screen name="BouquetGenerationScreen" position="center,center" size="1350,375" title="Tworzenie bukietu" backgroundColor="#00000000" flags="wfNoBorder">
-        <eLabel position="0,0" size="1350,375" backgroundColor="#D9000000" zPosition="-1" />
-        <widget source="title" render="Label" position="45,45" size="1260,66" font="Regular;45" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
-        <eLabel position="45,135" size="1260,3" backgroundColor="#00bcd4" />
-        <widget name="message" position="68,180" size="1215,120" font="Regular;36" halign="center" valign="center" foregroundColor="#cccccc" transparent="1" />
+    <screen name="BouquetGenerationScreen" position="center,center" size="1100,300" title="Tworzenie bukietu" backgroundColor="#00000000" flags="wfNoBorder">
+        <eLabel position="0,0" size="1100,82" backgroundColor="#1A000000" zPosition="-1" />
+        <eLabel position="0,82" size="1100,148" backgroundColor="#33000000" zPosition="-1" />
+        <eLabel position="0,230" size="1100,70" backgroundColor="#1A000000" zPosition="-1" />
+        <widget source="title" render="Label" position="35,16" size="1030,42" font="Regular;32" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
+        <eLabel position="35,66" size="1030,2" backgroundColor="#00bcd4" />
+        <widget name="message" position="55,105" size="990,82" font="Regular;25" halign="center" valign="center" foregroundColor="#cccccc" transparent="1" />
+        <eLabel position="35,214" size="1030,2" backgroundColor="#00bcd4" />
     </screen>
     <screen name="PiconPathSelectionScreen" position="center,center" size="1536,864" title="Wybierz lokalizację picon" backgroundColor="#00000000" flags="wfNoBorder">
         <eLabel position="0,0" size="1536,132" backgroundColor="#1A000000" zPosition="-1" />

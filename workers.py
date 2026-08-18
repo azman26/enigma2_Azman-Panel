@@ -871,6 +871,7 @@ class LgChannelsPlBouquetWorker(BaseWorker):
             metadata = None
             seen_urls = set()
             count = 0
+            channels = []
             for raw_line in content.splitlines():
                 line = raw_line.strip()
                 if not line:
@@ -890,11 +891,17 @@ class LgChannelsPlBouquetWorker(BaseWorker):
                 seen_urls.add(stream_url)
                 name = metadata.rsplit(",", 1)[-1].strip() or "LG Channels"
                 name = re.sub(r"^\d+\s+", "", name).replace(":", " ").replace("\n", " ")
+                channels.append((name, stream_url))
+                metadata = None
+            epg_mapper = PanelEpgMapper()
+            epg_mapper.prefetch([name for name, _stream_url in channels])
+            for name, stream_url in channels:
                 encoded_url = urllib.parse.quote(stream_url, safe="")
-                lines.append("#SERVICE 4097:0:1:0:0:0:0:0:0:0:%s:%s\n" % (encoded_url, name))
+                epg_reference = epg_mapper.reference(name)
+                service_prefix = "4097:%s" % epg_reference if epg_reference else "4097:0:1:0:0:0:0:0:0:0"
+                lines.append("#SERVICE %s:%s:%s\n" % (service_prefix, encoded_url, name))
                 lines.append("#DESCRIPTION %s\n" % name)
                 count += 1
-                metadata = None
             if self._is_cancelled:
                 raise InterruptedError()
             if count == 0:
@@ -941,7 +948,7 @@ class IptvOrgWorker(BaseWorker):
             if self._is_cancelled: raise InterruptedError()
             
             bouquet_lines = ["#NAME IPTV.ORG Poland\n"]
-            channel_count = 0
+            channels = []
             
             lines = m3u_content.splitlines()
             for i, line in enumerate(lines):
@@ -961,15 +968,19 @@ class IptvOrgWorker(BaseWorker):
                             
                             
                             
-                            encoded_url = urllib.parse.quote(stream_url)
-                            
-                            
-                            bouquet_lines.append(f"#SERVICE 4097:0:1:0:0:0:0:0:0:0:{encoded_url}:{cleaned_name}\n")
-                            
-                            bouquet_lines.append(f"#DESCRIPTION {cleaned_name}\n")
-                            channel_count += 1
+                            channels.append((cleaned_name, stream_url))
                     except IndexError:
                         continue
+
+            epg_mapper = PanelEpgMapper()
+            epg_mapper.prefetch([name for name, _stream_url in channels])
+            for cleaned_name, stream_url in channels:
+                encoded_url = urllib.parse.quote(stream_url)
+                epg_reference = epg_mapper.reference(cleaned_name)
+                service_prefix = "4097:%s" % epg_reference if epg_reference else "4097:0:1:0:0:0:0:0:0:0"
+                bouquet_lines.append(f"#SERVICE {service_prefix}:{encoded_url}:{cleaned_name}\n")
+                bouquet_lines.append(f"#DESCRIPTION {cleaned_name}\n")
+            channel_count = len(channels)
             
             if self._is_cancelled: raise InterruptedError()
 

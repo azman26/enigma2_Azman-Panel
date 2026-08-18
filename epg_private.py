@@ -10,6 +10,8 @@ except ImportError:
 
 
 class PrivateEpgApiClient(object):
+    MAX_CHANNELS_PER_REQUEST = 150
+
     def __init__(self, config_file, logger=None):
         self.config_file = config_file
         self.logger = logger
@@ -24,6 +26,10 @@ class PrivateEpgApiClient(object):
 
     def _config(self):
         try:
+            try:
+                os.chmod(self.config_file, 0o600)
+            except Exception:
+                pass
             with open(self.config_file, "r") as handle:
                 data = json.load(handle)
             return data if isinstance(data, dict) else {}
@@ -46,7 +52,8 @@ class PrivateEpgApiClient(object):
             return {}
         requested = [name for name in names if name not in self.cache]
         if requested:
-            self._request(requested)
+            for offset in range(0, len(requested), self.MAX_CHANNELS_PER_REQUEST):
+                self._request(requested[offset:offset + self.MAX_CHANNELS_PER_REQUEST])
         return {name: self.cache.get(name, "") for name in names if self.cache.get(name)}
 
     def _request(self, names):
@@ -75,7 +82,9 @@ class PrivateEpgApiClient(object):
             for name in names:
                 reference = str(mappings.get(name) or "").strip()
                 self.cache[name] = reference if len(reference.split(":")) == 9 else ""
+            resolved_count = sum(1 for name in names if self.cache.get(name))
+            self._log("private EPG API resolved %d of %d references" % (resolved_count, len(names)))
         except Exception as error:
-            self._log("private EPG API failed: %s" % error)
+            self._log("private EPG API failed: %s" % error.__class__.__name__)
             for name in names:
                 self.cache[name] = ""
