@@ -6,7 +6,7 @@
     {
       "id": "azman-panel",
       "name": "Azman Panel",
-      "version": "2026.08.19-0005",
+      "version": "2026.08.19-1643",
       "category": "system",
       "description": "Panel instalacyjny i narzędziowy ekosystemu Azman.",
       "python": ["3.12", "3.13", "3.14"],
@@ -154,12 +154,12 @@
       "package": "enigma2-plugin-extensions--azman-freetvplayer",
       "variants": {
         "py313": {
-          "ipk": "py313/enigma2-plugin-extensions--azman-freetvplayer-py313_2026.08.19-0005_all.ipk",
-          "sha256": "6802b4cf042d8f71325b165b07e1cf98594d4bc472a78139a244da6be3ec5cca"
+          "ipk": "py313/enigma2-plugin-extensions--azman-freetvplayer-py313_2026.08.19-1643_all.ipk",
+          "sha256": "b0cd5540230c462867e4aa12142b8d969e89ac88fea455eb05965374c4335f8a"
         },
         "py314": {
-          "ipk": "py314/enigma2-plugin-extensions--azman-freetvplayer-py314_2026.08.19-0005_all.ipk",
-          "sha256": "b1b9f77d52cb24f0ffe2bd975ee63090551e89644d61021bf0d5b8a046ef80e7"
+          "ipk": "py314/enigma2-plugin-extensions--azman-freetvplayer-py314_2026.08.19-1643_all.ipk",
+          "sha256": "4056ffe26335da0d48f61c98638ce8df8386a6cecdfd72f47ea895b6f6c3eec5"
         }
       },
       "protected": true
