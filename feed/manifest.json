@@ -6,7 +6,7 @@
     {
       "id": "azman-panel",
       "name": "Azman Panel",
-      "version": "2026.08.19-1643",
+      "version": "2026.08.19-0005",
       "category": "system",
       "description": "Panel instalacyjny i narzędziowy ekosystemu Azman.",
       "python": ["3.12", "3.13", "3.14"],
