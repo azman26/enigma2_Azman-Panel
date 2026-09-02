@@ -70,8 +70,12 @@ else
     echo "Uwaga: brak sha256sum, pomijam lokalna weryfikacje sumy."
 fi
 
+echo "Aktualizowanie listy pakietow opkg..."
+if ! opkg update; then
+    echo "Uwaga: opkg update zglosilo blad (prawdopodobnie inne, niedostepne repozytorium) - kontynuuje instalacje."
+fi
+
 echo "Instalowanie Azman Panel..."
-opkg update
 opkg --force-reinstall install "$IPK_FILE"
 
 echo "Azman Panel zostal zainstalowany. Restartowanie GUI Enigma2..."
