@@ -2,8 +2,13 @@ name: Azman Panel - build i release
 
 # Uruchamia się automatycznie, gdy publikujesz Release na GitHubie (tak jak
 # robisz to teraz ręcznie) - buduje IPK w tym samym obrazie Dockera co
-# lokalnie (00 AzmanPanel/packaging), wgrywa go jako załącznik do tego
-# Release'u i aktualizuje feed/manifest.json (wersja, suma SHA-256, URL).
+# lokalnie (packaging/), wgrywa go jako załącznik do tego Release'u
+# i aktualizuje feed/manifest.json (wersja, suma SHA-256, URL).
+#
+# Uwaga: pliki źródłowe (screens.py, workers.py, ...) leżą w tym repo wprost
+# w korzeniu, nie pod folderem "00 AzmanPanel/" - to nazwa używana tylko
+# lokalnie na dysku do porządkowania wielu projektów, nie odpowiada
+# strukturze tego repo.
 #
 # "workflow_dispatch" pozwala też odpalić sam build ręcznie (zakładka
 # Actions -> ten workflow -> Run workflow) bez tworzenia Release'u - wtedy
@@ -48,14 +53,14 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Zbuduj obraz buildera
-        run: docker build -t azman-panel-ipk "00 AzmanPanel/packaging"
+        run: docker build -t azman-panel-ipk packaging
 
       - name: Zbuduj IPK
         run: |
           mkdir -p build/ipk
           docker run --rm \
             -e VERSION="${{ steps.version.outputs.version }}" \
-            -v "${{ github.workspace }}/00 AzmanPanel:/source:ro" \
+            -v "${{ github.workspace }}:/source:ro" \
             -v "${{ github.workspace }}/build/ipk:/output" \
             azman-panel-ipk
 
