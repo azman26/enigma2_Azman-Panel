@@ -1,0 +1,6 @@
+private-server/
+build/
+*.ipk
+__pycache__/
+*.pyc
+.pytest_cache/
