@@ -1,0 +1,8 @@
+Package: enigma2-plugin-extensions--azman-azmanpanel
+Version: 2026.09.02-1241
+Description: Azman Panel - centralny panel instalacyjny i narzędziowy
+Architecture: all
+Section: extensions
+Priority: optional
+Maintainer: azman
+License: GPL-2.0-or-later
