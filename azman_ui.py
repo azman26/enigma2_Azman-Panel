@@ -4,20 +4,6 @@ import re
 from enigma import getDesktop
 from skin import loadSkin
 
-FHD_SIZE = (1920, 1080)
-METRIX_COLORS = {
-    "background": "#1A000000",
-    "panel": "#55000000",
-    "foreground": "#FFFFFF",
-    "muted": "#cccccc",
-    "accent": "#39c0e0",
-    "red": "red",
-    "green": "green",
-    "yellow": "yellow",
-    "blue": "blue",
-}
-
-
 def scale_skin(skin, minimum_size=(1200, 600)):
     try:
         desktop = getDesktop(0).size()

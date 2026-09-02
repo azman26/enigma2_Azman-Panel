@@ -98,6 +98,25 @@ def remove_bouquet_and_registration(directory, filename):
     if len(retained) != len(lines):
         atomic_write_lines(registry_path, retained)
 
+def register_bouquets(directory, filenames):
+    """Dopisuje do bouquets.tv brakujące wpisy FROM BOUQUET dla podanych plików."""
+    registry_path = os.path.join(directory, "bouquets.tv")
+    lines = []
+    if os.path.exists(registry_path):
+        with open(registry_path, "r") as handle:
+            lines = handle.readlines()
+    while lines and lines[-1].strip() == "":
+        lines.pop()
+    existing_services = {line.strip() for line in lines if "FROM BOUQUET" in line}
+    changed = False
+    for filename in filenames:
+        service_line = '#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet' % filename
+        if service_line not in existing_services:
+            lines.append(service_line + "\n")
+            changed = True
+    if changed:
+        atomic_write_lines(registry_path, lines)
+
 def log_error(exception, context_info="Unknown", **kwargs):
     try:
         _write_log("ERROR", "%s: %s: %s" % (context_info, type(exception).__name__, exception), **kwargs)

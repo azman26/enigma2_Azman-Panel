@@ -31,88 +31,6 @@ def _load_panel_skin():
 
 _load_panel_skin()
 
-class AzmanSelectListScreen(Screen):
-    def __init__(self, session, title, item_list, on_install_callback=None, on_uninstall_callback=None):
-        Screen.__init__(self, session)
-        self.setTitle(title)
-        self.item_list = item_list
-        self.selected_items = []
-        self.on_install_callback = on_install_callback
-        self.on_uninstall_callback = on_uninstall_callback
-        self.is_bouquet_list = bool(item_list and str(item_list[0][0]).startswith("userbouquet."))
-        
-        self["title"] = StaticText(title)
-        self["selection_info"] = StaticText("")
-        self["key_green"] = StaticText("Zainstaluj (0)")
-        self["key_red"] = StaticText("Odinstaluj" if on_uninstall_callback else "Anuluj")
-        self["key_yellow"] = StaticText("Zaznacz/Odznacz wszystko")
-        self["list"] = MenuList([])
-        
-        self["actions"] = ActionMap(
-            ["OkCancelActions", "ColorActions"], 
-            {
-                "cancel": self.keyCancel, 
-                "ok": self.toggle_selection, 
-                "green": self.install_selected, 
-                "red": self.uninstall_selected,
-                "yellow": self.toggle_all
-            }, 
-            -1
-        )
-        self.onLayoutFinish.append(self.build_list)
-
-    def build_list(self):
-        current = self["list"].getCurrent()
-        current_value = current[1] if current else None
-        entries = []
-        for value, label in self.item_list:
-            checked = "☑" if value in self.selected_items else "☐"
-            if self.is_bouquet_list:
-                status = "  • ZAINSTALOWANY" if os.path.exists(os.path.join("/etc/enigma2", value)) else "  • NOWY"
-            else:
-                status = "  • PACZKA ZIP"
-            entries.append((f"{checked}  {label}{status}", value))
-        self["list"].setList(entries)
-        self["selection_info"].setText("Zaznaczono: %d z %d   |   OK - zaznacz/odznacz" % (len(self.selected_items), len(self.item_list)))
-        self["key_green"].setText("Zainstaluj (%d)" % len(self.selected_items))
-        if current_value:
-            for index, entry in enumerate(entries):
-                if entry[1] == current_value:
-                    self["list"].moveToIndex(index)
-                    break
-
-    def toggle_selection(self):
-        current = self["list"].getCurrent()
-        if not current: return
-        path_value = current[1]
-        if path_value in self.selected_items: 
-            self.selected_items.remove(path_value)
-        else: 
-            self.selected_items.append(path_value)
-        self.build_list()
-
-    def toggle_all(self):
-        all_paths = [i[0] for i in self.item_list]
-        self.selected_items = [] if len(self.selected_items) == len(all_paths) else all_paths
-        self.build_list()
-
-    def install_selected(self):
-        if self.on_install_callback and self.selected_items:
-            selected = list(self.selected_items)
-            self.close()
-            self.on_install_callback(selected)
-
-    def uninstall_selected(self):
-        if self.on_uninstall_callback and self.selected_items:
-            selected = list(self.selected_items)
-            self.close()
-            self.on_uninstall_callback(selected)
-        elif not self.on_uninstall_callback:
-            self.close([])
-
-    def keyCancel(self):
-        self.close([])
-
 class PackageTileSelectionScreen(Screen):
     GRID_COLS = 3
     GRID_ROWS = 3
@@ -503,6 +421,11 @@ class AzmanFeedScreen(Screen):
         self.session.openWithCallback(self.refresh_list, OpkgCommandScreen, command=command, title=title)
 
 class AzmanPanelMainScreen(Screen):
+    COMING_SOON_NAMES = (
+        "Bukiety FAST", "Polskie źródła EPG",
+        "Shelly Control", "MiHome Control",
+    )
+
     def __init__(self, session):
         Screen.__init__(self, session)
         self.session = session
@@ -512,6 +435,7 @@ class AzmanPanelMainScreen(Screen):
         self.available_panel_version = ""
         self.available_package_updates = []
         self.update_check_error = ""
+        self._plugins_update_queue = []
         self.info_subtab_index = 0
         utils.log_event("Otwarto Azman Panel", version=constants.PLUGIN_VERSION)
         
@@ -548,6 +472,8 @@ class AzmanPanelMainScreen(Screen):
         self["info_tab_1"] = Label("")
         self["info_separator_v"] = Label("")
         self["info_separator_h"] = Label("")
+        self["info_nav_left"] = Label("<")
+        self["info_nav_right"] = Label(">")
         for r in range(self.GRID_ROWS):
             for c in range(self.GRID_WIDGET_COLS):
                 self[f"logo_{r}x{c}"], self[f"marker_{r}x{c}"] = Pixmap(), Pixmap()
@@ -614,12 +540,8 @@ class AzmanPanelMainScreen(Screen):
             ("Aktualizacja satellites.xml", self.start_satellites_xml_update, "icon_satellitesxml.png", "Pobiera aktualny satellites.xml z OE-Alliance lub OpenPLi i tworzy kopię pliku przed zapisem."),
         ]
         
-        coming_soon_names = (
-            "Bukiety FAST", "Polskie \u017ar\xf3d\u0142a EPG",
-            "Shelly Control", "MiHome Control",
-        )
         menu_definitions = [
-            (text, (lambda name=text: self.show_coming_soon(name)) if text in coming_soon_names else func, icon, description)
+            (text, (lambda name=text: self.show_coming_soon(name)) if text in self.COMING_SOON_NAMES else func, icon, description)
             for text, func, icon, description in menu_definitions
         ]
 
@@ -717,7 +639,11 @@ class AzmanPanelMainScreen(Screen):
             self["info_tab_1"].hide()
             self["info_separator_v"].hide()
             self["info_separator_h"].hide()
+            self["info_nav_left"].hide()
+            self["info_nav_right"].hide()
             self["key_green"].setText("Instaluj")
+            self["key_yellow"].setText("Poprzednia zakładka")
+            self["key_blue"].setText("Następna zakładka")
         self.GRID_ROWS = max(1, (len(self.menu_items) + self.GRID_COLS - 1) // self.GRID_COLS)
         self.selected_pos = (0, 0)
         self["tabs"].setText("")
@@ -726,11 +652,17 @@ class AzmanPanelMainScreen(Screen):
             self["tab_%d" % index].instance.setForegroundColor(gRGB(0x39c0e0 if index == self.current_tab_index else 0xffffff))
 
     def next_tab(self):
+        if self.tabs[self.current_tab_index] == "Info" and self.info_subtab_index == 1:
+            self.start_plugins_batch_update()
+            return
         self.current_tab_index = (self.current_tab_index + 1) % len(self.tabs)
         self.apply_tab_filter()
         self.draw_page()
 
     def previous_tab(self):
+        if self.tabs[self.current_tab_index] == "Info" and self.info_subtab_index == 1:
+            self.start_panel_update_from_button()
+            return
         self.current_tab_index = (self.current_tab_index - 1) % len(self.tabs)
         self.apply_tab_filter()
         self.draw_page()
@@ -759,6 +691,8 @@ class AzmanPanelMainScreen(Screen):
         self["info_tab_1"].show()
         self["info_separator_v"].show()
         self["info_separator_h"].show()
+        self["info_nav_left"].show()
+        self["info_nav_right"].show()
         if not is_updates:
             python_version = runtime.get_runtime_info()["python"]
             self["info_content"].setText(
@@ -771,24 +705,32 @@ class AzmanPanelMainScreen(Screen):
                 "Interfejs Panelu jest projektowany dla skórek FHD (1920×1080). Na skórkach HD (1280×720) może wyglądać nieprawidłowo." % python_version
             )
             self["key_green"].setText("Widoczność menu")
-        elif self.update_check_error:
-            self["info_content"].setText("Sprawdzenie aktualizacji Azman\n\nNie udało się pobrać informacji o aktualizacjach.\n%s" % self.update_check_error)
-            self["key_green"].setText("Widoczność menu")
+            self["key_yellow"].setText("Poprzednia zakładka")
+            self["key_blue"].setText("Następna zakładka")
         else:
-            lines = ["Sprawdzenie aktualizacji Azman", ""]
-            if self.update_worker:
-                lines.append("Trwa sprawdzanie wersji…")
+            self["key_green"].setText("Sprawdź aktualizacje")
+            self["key_yellow"].setText("Aktualizacja Panelu")
+            self["key_blue"].setText("Aktualizacja Pluginów")
+            if self.update_check_error:
+                self["info_content"].setText("Sprawdzenie aktualizacji Azman\n\nNie udało się pobrać informacji o aktualizacjach.\n%s" % self.update_check_error)
             else:
-                lines.append("Azman Panel: %s" % ("dostępna wersja %s" % self.available_panel_version if self.available_panel_version else "aktualny"))
-                if self.available_package_updates:
-                    lines.extend(["", "Aktualizacje pluginów:"])
-                    lines.extend("• %s: %s → %s" % item for item in self.available_package_updates)
+                lines = ["Sprawdzenie aktualizacji Azman", ""]
+                if self.update_worker:
+                    lines.append("Trwa sprawdzanie wersji…")
                 else:
-                    lines.extend(["", "Pluginy Azman: aktualne"])
-                if self.available_panel_version:
-                    lines.extend(["", "ZIELONY — pobierz i zainstaluj aktualizację Azman Panel."])
-            self["info_content"].setText("\n".join(lines))
-            self["key_green"].setText("Aktualizuj Panel" if self.available_panel_version else "Widoczność menu")
+                    lines.append("Azman Panel: %s" % ("dostępna wersja %s" % self.available_panel_version if self.available_panel_version else "aktualny"))
+                    if self.available_package_updates:
+                        lines.extend(["", "Aktualizacje pluginów:"])
+                        lines.extend("• %s: %s → %s" % (name, local, remote) for _pkg_id, name, local, remote in self.available_package_updates)
+                    else:
+                        lines.extend(["", "Pluginy Azman: aktualne"])
+                    lines.extend([
+                        "",
+                        "ZIELONY — sprawdź ponownie dostępność aktualizacji.",
+                        "ŻÓŁTY — zainstaluj aktualizację Azman Panel." if self.available_panel_version else "ŻÓŁTY — Azman Panel jest aktualny.",
+                        "NIEBIESKI — zainstaluj wszystkie aktualizacje pluginów." if self.available_package_updates else "NIEBIESKI — pluginy Azman są aktualne.",
+                    ])
+                self["info_content"].setText("\n".join(lines))
         self["info_content"].show()
         
     def draw_page(self):
@@ -835,14 +777,8 @@ class AzmanPanelMainScreen(Screen):
 
     def install_selected(self):
         if self.tabs[self.current_tab_index] == "Info":
-            if self.info_subtab_index == 1 and self.available_panel_version:
-                self.session.openWithCallback(
-                    self._confirm_panel_self_update,
-                    MessageBox,
-                    "Dostępna jest wersja Azman Panel %s.\n\nCzy chcesz pobrać i zainstalować aktualizację?" % self.available_panel_version,
-                    type=MessageBox.TYPE_YESNO,
-                    default=True,
-                )
+            if self.info_subtab_index == 1:
+                self.start_manual_update_check()
                 return
             self.toggle_main_menu_visibility()
             return
@@ -850,11 +786,7 @@ class AzmanPanelMainScreen(Screen):
         if item_index >= len(self.menu_items):
             return
         item = self.menu_items[item_index]
-        coming_soon_names = (
-            "Bukiety FAST", "Polskie \u017ar\xf3d\u0142a EPG",
-            "Shelly Control", "MiHome Control",
-        )
-        if item["text"] in coming_soon_names:
+        if item["text"] in self.COMING_SOON_NAMES:
             self.show_coming_soon(item["text"])
             return
         if self.get_item_category(item) != "Pluginy":
@@ -894,6 +826,113 @@ class AzmanPanelMainScreen(Screen):
             type=MessageBox.TYPE_INFO,
         )
         self.current_worker.start()
+
+    def start_manual_update_check(self):
+        if self.update_worker or self.current_worker:
+            return
+        self.update_check_error = ""
+        self.update_worker = ManifestUpdateCheckWorker(self._on_manual_update_check_finished)
+        self.show_info_subtab()
+        self.update_worker.start()
+
+    def _on_manual_update_check_finished(self, error_message, panel_version, package_updates):
+        self.update_worker = None
+        self.available_panel_version = panel_version or ""
+        self.available_package_updates = package_updates or []
+        self.update_check_error = error_message or ""
+        if self.tabs[self.current_tab_index] == "Info":
+            self.show_info_subtab()
+
+    def start_panel_update_from_button(self):
+        if self.current_worker:
+            return
+        if not self.available_panel_version:
+            self.session.open(MessageBox, "Azman Panel jest aktualny.", type=MessageBox.TYPE_INFO, timeout=4)
+            return
+        self.session.openWithCallback(
+            self._confirm_panel_self_update,
+            MessageBox,
+            "Dostępna jest wersja Azman Panel %s.\n\nCzy chcesz pobrać i zainstalować aktualizację?" % self.available_panel_version,
+            type=MessageBox.TYPE_YESNO,
+            default=True,
+        )
+
+    def start_plugins_batch_update(self):
+        if self.current_worker:
+            return
+        if not self.available_package_updates:
+            self.session.open(MessageBox, "Wszystkie pluginy Azman są aktualne.", type=MessageBox.TYPE_INFO, timeout=4)
+            return
+        listing = "\n".join(
+            "- %s: %s → %s" % (name, local, remote)
+            for _pkg_id, name, local, remote in self.available_package_updates
+        )
+        self.session.openWithCallback(
+            self._confirm_plugins_batch_update,
+            MessageBox,
+            "Dostępne aktualizacje pluginów:\n\n%s\n\nCzy chcesz pobrać i zainstalować wszystkie?" % listing,
+            type=MessageBox.TYPE_YESNO,
+            default=True,
+        )
+
+    def _confirm_plugins_batch_update(self, confirmed):
+        if not confirmed:
+            return
+        self._plugins_update_queue = list(self.available_package_updates)
+        self._process_next_plugin_update()
+
+    def _process_next_plugin_update(self, *args):
+        if not self._plugins_update_queue:
+            return
+        package_id, name, local_version, remote_version = self._plugins_update_queue.pop(0)
+        self._manifest_install_title = name
+        self.download_messagebox = self.session.open(
+            MessageBox,
+            "Pobieranie i weryfikacja aktualizacji: %s…" % name,
+            type=MessageBox.TYPE_INFO,
+        )
+        self.current_worker = ManifestPackageDownloadWorker(package_id, self._on_batch_package_ready)
+        self.current_worker.start()
+
+    def _on_batch_package_ready(self, error_message, package_path, remove_package_names=None):
+        self.current_worker = None
+        if getattr(self, "download_messagebox", None):
+            self.download_messagebox.close()
+            self.download_messagebox = None
+        self._pending_batch_result = (error_message, package_path, remove_package_names)
+        self.open_timer.stop()
+        self.open_timer.callback.clear()
+        self.open_timer.callback.append(self._open_batch_result)
+        self.open_timer.start(1, True)
+
+    def _open_batch_result(self):
+        error_message, package_path, remove_package_names = getattr(
+            self, "_pending_batch_result", (None, None, None)
+        )
+        self._pending_batch_result = None
+        name = getattr(self, "_manifest_install_title", "plugin")
+        if error_message or not package_path or not os.path.isfile(package_path):
+            utils.log_error(
+                RuntimeError(error_message or "brak pobranego pliku IPK"),
+                "aktualizacja wsadowa", package=name
+            )
+            self.session.open(
+                MessageBox,
+                "Nie udało się zaktualizować %s:\n%s" % (name, error_message or "brak pobranego pakietu"),
+                type=MessageBox.TYPE_ERROR,
+                timeout=6,
+            )
+            self._process_next_plugin_update()
+            return
+        is_last = not self._plugins_update_queue
+        install_command = self._build_install_command(package_path, remove_package_names)
+        self._handle_install_with_restart(
+            "Aktualizowanie: %s" % name,
+            install_command,
+            callback=lambda: self._remove_temporary_package(package_path),
+            restart_gui=is_last,
+            on_screen_closed=None if is_last else self._process_next_plugin_update,
+        )
 
     def toggle_main_menu_visibility(self):
         config.plugins.AzmanPanel.main_menu_visible.value = not config.plugins.AzmanPanel.main_menu_visible.value
@@ -993,11 +1032,17 @@ class AzmanPanelMainScreen(Screen):
         self._open_picon_selection_screen()
         
     def _open_picon_selection_screen(self, *args):
+        self.download_messagebox = self.session.open(
+            MessageBox, "Pobieranie listy paczek picon…", type=MessageBox.TYPE_INFO
+        )
         self.current_worker = PiconZipListWorker(callback_finished=self.on_picon_list_downloaded)
         self.current_worker.start()
-        
+
     def on_picon_list_downloaded(self, error_message, picon_zip_filenames):
         self.current_worker = None
+        if getattr(self, "download_messagebox", None):
+            self.download_messagebox.close()
+            self.download_messagebox = None
         if error_message or not picon_zip_filenames:
             msg = error_message or "Nie znaleziono plików *.zip na serwerze."
             self.session.open(MessageBox, msg, MessageBox.TYPE_ERROR)
@@ -1150,11 +1195,12 @@ class AzmanPanelMainScreen(Screen):
             return
         self._defer_action(lambda: self._start_radio_bouquet("MyRadioOnline", MyRadioOnlineBouquetWorker))
 
-    def on_myradioonline_bouquet_finished(self, error_message, final_message):
-        self._on_radio_bouquet_finished(error_message, final_message)
-
     def _show_bouquet_result(self, error_message, final_message):
-        self.session.open(MessageBox, error_message or final_message or "Operacja zakończona.", MessageBox.TYPE_ERROR if error_message else MessageBox.TYPE_INFO, timeout=10)
+        message = error_message or final_message or "Operacja zakończona."
+        if error_message:
+            self.session.open(MessageBox, message, MessageBox.TYPE_ERROR)
+        else:
+            self.session.open(MessageBox, message, MessageBox.TYPE_INFO, timeout=10)
 
     def start_polskieradio_bouquet(self):
         self.session.openWithCallback(
@@ -1179,9 +1225,6 @@ class AzmanPanelMainScreen(Screen):
         if not confirmed: return
         self._defer_action(lambda: self._start_radio_bouquet("RMF ON", RmfonBouquetWorker))
 
-    def on_rmfon_bouquet_finished(self, error_message, final_message):
-        self._on_radio_bouquet_finished(error_message, final_message)
-
     def start_eurozet_bouquet(self):
         self.session.openWithCallback(self._confirm_eurozet_bouquet, MessageBox,
             "Pobrać aktualne stacje Eurozet i utworzyć bukiet radiowy?",
@@ -1190,9 +1233,6 @@ class AzmanPanelMainScreen(Screen):
     def _confirm_eurozet_bouquet(self, confirmed):
         if not confirmed: return
         self._defer_action(lambda: self._start_radio_bouquet("Eurozet", EurozetBouquetWorker))
-
-    def on_eurozet_bouquet_finished(self, error_message, final_message):
-        self._on_radio_bouquet_finished(error_message, final_message)
 
     def _start_radio_bouquet(self, bouquet_name, worker_class):
         self.progress_screen = self.session.open(BouquetGenerationScreen, bouquet_name)
@@ -1205,15 +1245,18 @@ class AzmanPanelMainScreen(Screen):
             self.progress_screen.close()
         self._defer_action(lambda: self._show_bouquet_result(error_message, final_message))
 
-    def on_polskieradio_bouquet_finished(self, error_message, final_message):
-        self._on_radio_bouquet_finished(error_message, final_message)
-
     def open_iptv_bouquet_manager(self, *args):
+        self.download_messagebox = self.session.open(
+            MessageBox, "Pobieranie listy bukietów IPTV PL…", type=MessageBox.TYPE_INFO
+        )
         self.current_worker = PrivateBouquetListWorker(callback_finished=self.on_iptv_bouquet_list_downloaded)
         self.current_worker.start()
 
     def on_iptv_bouquet_list_downloaded(self, error_message, bouquet_filenames):
         self.current_worker = None
+        if getattr(self, "download_messagebox", None):
+            self.download_messagebox.close()
+            self.download_messagebox = None
         if error_message or not bouquet_filenames:
             self.session.open(MessageBox, error_message or "Nie znaleziono bukietów na serwerze.", MessageBox.TYPE_ERROR)
             return
@@ -1254,29 +1297,40 @@ class AzmanPanelMainScreen(Screen):
         self.progress_screen.parent_worker = self.current_worker
         self.current_worker.start()
 
-    def on_iptv_bouquet_installation_finished(self, final_message):
+    def on_iptv_bouquet_installation_finished(self, error_message, final_message):
         self.current_worker = None
         def after_messagebox_callback(result):
             if hasattr(self, 'progress_screen') and self.progress_screen:
                 self.progress_screen.close()
             self.open_iptv_bouquet_manager()
-        self.session.openWithCallback(after_messagebox_callback, MessageBox, final_message, type=MessageBox.TYPE_INFO)
+        message = error_message or final_message
+        message_type = MessageBox.TYPE_ERROR if error_message else MessageBox.TYPE_INFO
+        self.session.openWithCallback(after_messagebox_callback, MessageBox, message, type=message_type)
 
     def _runtime_package_is_installed(self, package_base):
         runtime_info = runtime.get_runtime_info()
-        package_name = "%s-py%s%s" % (
+        runtime_package_name = "%s-py%s%s" % (
             package_base, runtime_info["python_major"], runtime_info["python_minor"]
         )
+        package_names = (runtime_package_name, package_base)
+        return self._package_is_installed(package_names)
+
+    def _package_is_installed(self, package_names):
+        if isinstance(package_names, str):
+            package_names = (package_names,)
         try:
             installed = subprocess.run(
                 ["opkg", "list-installed"], stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE, timeout=15, check=False
             ).stdout.decode("utf-8", errors="ignore")
         except Exception as error:
-            utils.log_error(error, "sprawdzanie zainstalowanego pakietu", package=package_name)
+            utils.log_error(error, "sprawdzanie zainstalowanego pakietu", package=", ".join(package_names))
             return False
         return any(
-            line.startswith(package_name + " ") or line.startswith(package_name + " -")
+            any(
+                line.startswith(package_name + " ") or line.startswith(package_name + " -")
+                for package_name in package_names
+            )
             for line in installed.splitlines()
         )
 
@@ -1289,20 +1343,7 @@ class AzmanPanelMainScreen(Screen):
         
         
     def start_monitoringburz_install(self):
-        runtime_info = runtime.get_runtime_info()
-        package_name = "enigma2-plugin-extensions--azman-monitoringburz-py%s%s" % (runtime_info["python_major"], runtime_info["python_minor"])
-        try:
-            installed = subprocess.run(
-                ["opkg", "list-installed"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=15,
-                check=False
-            ).stdout.decode("utf-8", errors="ignore")
-        except Exception:
-            installed = ""
-        if any(line.startswith(package_name + " ") or line.startswith(package_name + " -")
-               for line in installed.splitlines()):
+        if self._runtime_package_is_installed("enigma2-plugin-extensions--azman-monitoringburz"):
             self.session.openWithCallback(
                 self._confirm_monitoringburz_reinstall,
                 MessageBox,
@@ -1341,17 +1382,7 @@ class AzmanPanelMainScreen(Screen):
         self.current_worker.start()
 
     def start_stacjameteommz_install(self):
-        runtime_info = runtime.get_runtime_info()
-        package_name = "enigma2-plugin-extensions--azman-stacjameteommz-py%s%s" % (runtime_info["python_major"], runtime_info["python_minor"])
-        try:
-            installed = subprocess.run(
-                ["opkg", "list-installed"], stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, timeout=15, check=False
-            ).stdout.decode("utf-8", errors="ignore")
-        except Exception:
-            installed = ""
-        if any(line.startswith(package_name + " ") or line.startswith(package_name + " -")
-               for line in installed.splitlines()):
+        if self._runtime_package_is_installed("enigma2-plugin-extensions--azman-stacjameteommz"):
             self.session.openWithCallback(
                 self._confirm_stacjameteommz_reinstall,
                 MessageBox,
@@ -1389,17 +1420,7 @@ class AzmanPanelMainScreen(Screen):
         self.current_worker.start()
 
     def start_imgwmeteo_install(self):
-        runtime_info = runtime.get_runtime_info()
-        package_name = "enigma2-plugin-extensions--azman-imgwmeteo-py%s%s" % (runtime_info["python_major"], runtime_info["python_minor"])
-        try:
-            installed = subprocess.run(
-                ["opkg", "list-installed"], stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, timeout=15, check=False
-            ).stdout.decode("utf-8", errors="ignore")
-        except Exception:
-            installed = ""
-        if any(line.startswith(package_name + " ") or line.startswith(package_name + " -")
-               for line in installed.splitlines()):
+        if self._runtime_package_is_installed("enigma2-plugin-extensions--azman-imgwmeteo"):
             self.session.openWithCallback(
                 self._confirm_imgwmeteo_reinstall,
                 MessageBox,
@@ -1586,7 +1607,22 @@ class AzmanPanelMainScreen(Screen):
         )
         self.current_worker.start()
 
-    def _on_manifest_package_ready(self, error_message, package_path):
+    @staticmethod
+    def _build_install_command(package_path, remove_package_names):
+        # opkg nie usuwa automatycznie poprzedniej wersji, jeśli różni się
+        # nazwą pakietu (np. zmiana wariantu pyXXX między aktualizacjami) -
+        # dlatego zawsze próbujemy usunąć wszystkie znane nazwy pakietu
+        # przed instalacją nowej wersji. "opkg remove" kończy się błędem,
+        # gdy dany pakiet nie jest zainstalowany, więc łączymy polecenia
+        # średnikiem (nie &&), żeby brak jednej z wersji nie przerwał reszty.
+        parts = [
+            "opkg remove %s >/dev/null 2>&1" % shlex.quote(name)
+            for name in (remove_package_names or [])
+        ]
+        parts.append("opkg --force-reinstall install %s" % shlex.quote(package_path))
+        return " ; ".join(parts)
+
+    def _on_manifest_package_ready(self, error_message, package_path, remove_package_names=None):
         self.current_worker = None
         utils.log_event(
             "Zakończono przygotowanie pakietu",
@@ -1596,26 +1632,16 @@ class AzmanPanelMainScreen(Screen):
         if getattr(self, "download_messagebox", None):
             self.download_messagebox.close()
             self.download_messagebox = None
-        self._pending_manifest_result = (error_message, package_path)
+        self._pending_manifest_result = (error_message, package_path, remove_package_names)
         self.open_timer.stop()
         self.open_timer.callback.clear()
         self.open_timer.callback.append(self._open_manifest_result)
         self.open_timer.start(1, True)
-        return
-        if error_message:
-            self.session.open(MessageBox, "Nie udało się przygotować instalacji:\n%s" % error_message, type=MessageBox.TYPE_ERROR)
-            return
-        if not package_path or not os.path.isfile(package_path):
-            self.session.open(MessageBox, "Nie znaleziono pobranego pakietu.", type=MessageBox.TYPE_ERROR)
-            return
-        self._handle_install_with_restart(
-            "Instalowanie %s" % getattr(self, "_manifest_install_title", "pakietu"),
-            "opkg --force-reinstall install %s" % shlex.quote(package_path),
-            callback=lambda: self._remove_temporary_package(package_path)
-        )
 
     def _open_manifest_result(self):
-        error_message, package_path = getattr(self, "_pending_manifest_result", (None, None))
+        error_message, package_path, remove_package_names = getattr(
+            self, "_pending_manifest_result", (None, None, None)
+        )
         self._pending_manifest_result = None
         if error_message:
             utils.log_error(RuntimeError(error_message), "przygotowanie pakietu", package=getattr(self, "_manifest_install_title", "pakiet"))
@@ -1625,9 +1651,10 @@ class AzmanPanelMainScreen(Screen):
             utils.log_error(RuntimeError("Brak pobranego pliku IPK"), "przygotowanie pakietu", package=getattr(self, "_manifest_install_title", "pakiet"))
             self.session.open(MessageBox, "Nie znaleziono pobranego pakietu.", type=MessageBox.TYPE_ERROR)
             return
+        install_command = self._build_install_command(package_path, remove_package_names)
         self._handle_install_with_restart(
             "Instalowanie %s" % getattr(self, "_manifest_install_title", "pakietu"),
-            "opkg --force-reinstall install %s" % shlex.quote(package_path),
+            install_command,
             callback=lambda: self._remove_temporary_package(package_path)
         )
 
@@ -1639,15 +1666,25 @@ class AzmanPanelMainScreen(Screen):
         except OSError as error:
             utils.log_error(error, "remove temporary package", path=package_path)
 
-    def _handle_install_with_restart(self, title, command, callback=None):
+    def _handle_install_with_restart(self, title, command, callback=None, restart_gui=True, on_screen_closed=None):
         utils.log_event("Przekazano pakiet do instalacji", title=title)
-        self.session.open(
-            OpkgCommandScreen, 
-            title=title, 
-            command=command,
-            callback=callback,
-            restart_gui=True
-        )
+        if on_screen_closed:
+            self.session.openWithCallback(
+                on_screen_closed,
+                OpkgCommandScreen,
+                title=title,
+                command=command,
+                callback=callback,
+                restart_gui=restart_gui
+            )
+        else:
+            self.session.open(
+                OpkgCommandScreen,
+                title=title,
+                command=command,
+                callback=callback,
+                restart_gui=restart_gui
+            )
 
     def _defer_action(self, action):
         self.open_timer.stop()

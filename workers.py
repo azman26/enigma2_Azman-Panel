@@ -19,6 +19,24 @@ from enigma import eTimer, eDVBDB
 from . import constants, utils, runtime
 from .epg_mapper import PanelEpgMapper
 
+
+def derive_package_names(entry):
+    """Zwraca wszystkie znane nazwy pakietów opkg dla wpisu manifestu -
+    zarówno ogólną nazwę, jak i nazwy poszczególnych wariantów pyXXX.
+    Używane zarówno do sprawdzania zainstalowanej wersji, jak i do
+    usunięcia poprzedniej wersji przed instalacją nowej (opkg nie robi
+    tego automatycznie, gdy nazwa pakietu zmienia się między wariantami)."""
+    names = set()
+    package = str(entry.get("package") or "").strip()
+    if package:
+        names.add(package)
+    for variant in (entry.get("variants") or {}).values():
+        filename = os.path.basename(str(variant.get("ipk") or ""))
+        if filename.count("_") >= 2:
+            names.add(filename.rsplit("_", 2)[0])
+    return names
+
+
 class BaseWorker(threading.Thread):
     
     def __init__(self, callback_finished):
@@ -183,6 +201,7 @@ class ManifestPackageDownloadWorker(BaseWorker):
         self.package_id = package_id
         self.error_message = None
         self.package_path = None
+        self.remove_package_names = []
 
     def run(self):
         target = None
@@ -194,6 +213,7 @@ class ManifestPackageDownloadWorker(BaseWorker):
                           if item.get("id") == self.package_id), None)
             if not entry:
                 raise ValueError("Pakiet nie występuje w manifeście.")
+            self.remove_package_names = sorted(derive_package_names(entry))
             variant, variant_tag, compatibility_error = runtime.select_manifest_variant(entry)
             if compatibility_error:
                 raise ValueError(compatibility_error)
@@ -247,7 +267,7 @@ class ManifestPackageDownloadWorker(BaseWorker):
                 except OSError:
                     pass
         finally:
-            self._safe_call_main_thread(self.error_message, self.package_path)
+            self._safe_call_main_thread(self.error_message, self.package_path, self.remove_package_names)
 
 
 class ManifestUpdateCheckWorker(BaseWorker):
@@ -271,21 +291,9 @@ class ManifestUpdateCheckWorker(BaseWorker):
                 installed[package.strip()] = version.strip()
         return installed
 
-    @staticmethod
-    def _entry_package_names(entry):
-        names = set()
-        package = str(entry.get("package") or "").strip()
-        if package:
-            names.add(package)
-        for variant in (entry.get("variants") or {}).values():
-            filename = os.path.basename(str(variant.get("ipk") or ""))
-            if filename.count("_") >= 2:
-                names.add(filename.rsplit("_", 2)[0])
-        return names
-
     def _installed_entry_version(self, entry, installed):
         versions = []
-        for package_name in self._entry_package_names(entry):
+        for package_name in derive_package_names(entry):
             version = installed.get(package_name)
             if version:
                 versions.append(version)
@@ -311,7 +319,7 @@ class ManifestUpdateCheckWorker(BaseWorker):
                 if entry.get("id") == "azman-panel":
                     panel_update = remote_version
                 else:
-                    updates.append((name, local_version, remote_version))
+                    updates.append((entry.get("id"), name, local_version, remote_version))
             self._safe_call_main_thread(None, panel_update, updates)
         except Exception as error:
             utils.log_error(error, self.__class__.__name__, url=constants.AZMAN_MANIFEST_URL)
@@ -404,90 +412,6 @@ class PiconInstallationWorker(ProgressWorkerMixin, BaseWorker):
         finally:
             self._safe_call_main_thread(final_message)
             
-class IptvBouquetListWorker(BaseWorker):
-    
-    def __init__(self, list_url, callback_finished):
-        super(IptvBouquetListWorker, self).__init__(callback_finished)
-        self.list_url = list_url
-        self.error_message = None
-        self.bouquet_filenames = []
-        
-    def run(self):
-        try:
-            with urllib.request.urlopen(self.list_url, timeout=10) as response:
-                html = response.read().decode('utf-8')
-            found_files = re.findall(r'href="[^"]*?(userbouquet\.[^"]+\.tv)"', html)
-            self.bouquet_filenames = sorted(list(set(found_files)), key=lambda x: x.lower())
-            if not self.bouquet_filenames:
-                self.error_message = "Nie znaleziono żadnych plików bukietów w repozytorium."
-        except Exception as e:
-            utils.log_error(e, self.__class__.__name__, url=self.list_url)
-            self.error_message = "Błąd pobierania listy bukietów."
-        finally:
-            self._safe_call_main_thread(self.error_message, self.bouquet_filenames)
-
-class IptvBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
-    
-    def __init__(self, selected_bouquets, base_url, callback_progress, callback_finished):
-        super(IptvBouquetInstallWorker, self).__init__(callback_finished)
-        self.selected_bouquets = selected_bouquets
-        self.base_url = base_url
-        self.callback_progress = callback_progress
-        self._init_progress()
-            
-    def run(self):
-        final_message = ""
-        target_dir = "/etc/enigma2"
-        bouquets_tv_path = os.path.join(target_dir, "bouquets.tv")
-        
-        try:
-            source_filenames = [utils.validate_bouquet_filename(name) for name in self.selected_bouquets]
-            filenames = [utils.panel_bouquet_filename(name) for name in source_filenames]
-            total_bouquets = len(source_filenames)
-            for i, (source_filename, filename) in enumerate(zip(source_filenames, filenames)):
-                if self._is_cancelled: raise InterruptedError("Installation cancelled")
-                self._safe_call_progress(i, total_bouquets, f"Pobieranie: {source_filename}")
-                
-                download_url = self.base_url + source_filename
-                target_path = os.path.join(target_dir, filename)
-                urllib.request.urlretrieve(download_url, target_path, reporthook=self._internal_reporthook)
-                if source_filename != filename:
-                    utils.remove_bouquet_and_registration(target_dir, source_filename)
-
-            self._safe_call_progress(total_bouquets, total_bouquets, "Aktualizowanie bouquets.tv...")
-            
-            existing_lines = []
-            if os.path.exists(bouquets_tv_path):
-                with open(bouquets_tv_path, "r") as f:
-                    existing_lines = f.readlines()
-            
-            while existing_lines and existing_lines[-1].strip() == "":
-                existing_lines.pop()
-
-            existing_services = {line.strip() for line in existing_lines if 'FROM BOUQUET' in line}
-            
-            for filename in filenames:
-                bouquet_line = f'#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "{filename}" ORDER BY bouquet'
-                if bouquet_line not in existing_services:
-                    existing_lines.append(bouquet_line + "\n")
-            
-            utils.atomic_write_lines(bouquets_tv_path, existing_lines)
-            
-            self._safe_call_progress(total_bouquets, total_bouquets, "Przeładowywanie listy kanałów...")
-            
-            db = eDVBDB.getInstance()
-            db.reloadBouquets()
-            db.reloadServicelist()
-            final_message = f"Zainstalowano pomyślnie {len(self.selected_bouquets)} bukiet(ów).\nLista kanałów została przeładowana."
-                
-        except InterruptedError:
-            final_message = "Instalacja anulowana przez użytkownika."
-        except Exception as e:
-            utils.log_error(e, self.__class__.__name__, selected_bouquets=self.selected_bouquets)
-            final_message = f"Wystąpił błąd podczas instalacji:\n{e}"
-        finally:
-            self._safe_call_main_thread(final_message)
-
 class PrivateBouquetListWorker(BaseWorker):
     def __init__(self, callback_finished):
         super(PrivateBouquetListWorker, self).__init__(callback_finished)
@@ -520,7 +444,7 @@ class PrivateBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
 
     def run(self):
         target_dir = "/etc/enigma2"
-        bouquets_tv_path = os.path.join(target_dir, "bouquets.tv")
+        error_message = None
         final_message = ""
         try:
             source_filenames = [utils.validate_bouquet_filename(name) for name in self.selected_bouquets]
@@ -541,16 +465,7 @@ class PrivateBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
                     utils.remove_bouquet_and_registration(target_dir, source_filename)
 
             self._safe_call_progress(len(filenames), len(filenames), "Aktualizowanie bouquets.tv...")
-            existing_lines = []
-            if os.path.exists(bouquets_tv_path):
-                with open(bouquets_tv_path, "r") as handle:
-                    existing_lines = handle.readlines()
-            existing_services = {line.strip() for line in existing_lines if "FROM BOUQUET" in line}
-            for filename in filenames:
-                service_line = '#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet' % filename
-                if service_line not in existing_services:
-                    existing_lines.append(service_line + "\n")
-            utils.atomic_write_lines(bouquets_tv_path, existing_lines)
+            utils.register_bouquets(target_dir, filenames)
 
             self._safe_call_progress(len(filenames), len(filenames), "Przeładowywanie listy kanałów...")
             database = eDVBDB.getInstance()
@@ -558,12 +473,12 @@ class PrivateBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
             database.reloadServicelist()
             final_message = "Zainstalowano %d bukiet(ów). Lista kanałów została przeładowana." % len(filenames)
         except InterruptedError:
-            final_message = "Instalacja anulowana przez użytkownika."
+            error_message = "Instalacja anulowana przez użytkownika."
         except Exception as error:
             utils.log_error(error, self.__class__.__name__, selected_bouquets=self.selected_bouquets)
-            final_message = "Wystąpił błąd podczas instalacji: %s" % error
+            error_message = "Wystąpił błąd podczas instalacji: %s" % error
         finally:
-            self._safe_call_main_thread(final_message)
+            self._safe_call_main_thread(error_message, final_message)
 
 class IptvBouquetUninstallWorker(ProgressWorkerMixin, BaseWorker):
     
@@ -574,27 +489,28 @@ class IptvBouquetUninstallWorker(ProgressWorkerMixin, BaseWorker):
         self._init_progress()
             
     def run(self):
+        error_message = None
         final_message = ""
         target_dir = "/etc/enigma2"
         bouquets_tv_path = os.path.join(target_dir, "bouquets.tv")
-        
+
         try:
             self.selected_bouquets = [utils.panel_bouquet_filename(name) for name in self.selected_bouquets]
             total_bouquets = len(self.selected_bouquets)
             for i, filename in enumerate(self.selected_bouquets):
                 if self._is_cancelled: raise InterruptedError("Uninstallation cancelled")
                 self._safe_call_progress(i, total_bouquets, f"Usuwanie: {filename}")
-                
+
                 target_path = os.path.join(target_dir, filename)
                 if os.path.exists(target_path):
                     os.remove(target_path)
 
             self._safe_call_progress(total_bouquets, total_bouquets, "Aktualizowanie bouquets.tv...")
-            
+
             if os.path.exists(bouquets_tv_path):
                 with open(bouquets_tv_path, "r") as f:
                     lines = f.readlines()
-                
+
                 selected_lines = {
                     f'FROM BOUQUET "{name}"' for name in self.selected_bouquets
                 }
@@ -608,17 +524,49 @@ class IptvBouquetUninstallWorker(ProgressWorkerMixin, BaseWorker):
             db.reloadBouquets()
             db.reloadServicelist()
             final_message = f"Odinstalowano pomyślnie {len(self.selected_bouquets)} bukiet(ów).\nLista kanałów została przeładowana."
-                
+
         except InterruptedError:
-            final_message = "Odinstalowywanie anulowane przez użytkownika."
+            error_message = "Odinstalowywanie anulowane przez użytkownika."
         except Exception as e:
             utils.log_error(e, self.__class__.__name__, selected_bouquets=self.selected_bouquets)
-            final_message = f"Wystąpił błąd podczas odinstalowywania:\n{e}"
+            error_message = f"Wystąpił błąd podczas odinstalowywania:\n{e}"
         finally:
-            self._safe_call_main_thread(final_message)
+            self._safe_call_main_thread(error_message, final_message)
 
 
-class MyRadioOnlineBouquetWorker(BaseWorker):
+class _RadioApiBouquetWorker(BaseWorker):
+    def _write_bouquet(self, filename, title, stations, service_type="2",
+                        legacy_filename=None, name_suffix=" (azman)"):
+        path = os.path.join("/etc/enigma2", filename)
+        lines = ["#NAME %s%s\n" % (title, name_suffix)]
+        mapper = PanelEpgMapper()
+        mapper.prefetch([name for name, _url in stations])
+        for name, url in stations:
+            name = re.sub(r"[\r\n:]", " ", str(name)).strip()
+            encoded = urllib.parse.quote(str(url), safe="")
+            reference = mapper.reference(name)
+            prefix = "4097:%s" % reference if reference else "4097:0:%s:0:0:0:0:0:0:0" % service_type
+            lines.append("#SERVICE %s:%s:%s\n" % (prefix, encoded, name))
+            lines.append("#DESCRIPTION %s\n" % name)
+        if not stations:
+            raise ValueError("Nie znaleziono dostępnych stacji radiowych.")
+        utils.atomic_write_lines(path, lines)
+        if legacy_filename is None:
+            legacy_filename = filename.replace("userbouquet.azmanpanel_", "userbouquet.azman_iptv_", 1)
+        if legacy_filename:
+            utils.remove_bouquet_and_registration("/etc/enigma2", legacy_filename)
+        bouquets = "/etc/enigma2/bouquets.tv"
+        existing = open(bouquets, "r").readlines() if os.path.exists(bouquets) else []
+        marker = '#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet\n' % filename
+        if not any(filename in line for line in existing):
+            existing.append(marker)
+            utils.atomic_write_lines(bouquets, existing)
+        db = eDVBDB.getInstance()
+        db.reloadBouquets()
+        db.reloadServicelist()
+
+
+class MyRadioOnlineBouquetWorker(_RadioApiBouquetWorker):
     """Pobiera publiczny katalog MyRadioOnline i tworzy bukiet radiowy."""
 
     def __init__(self, callback_finished):
@@ -631,7 +579,6 @@ class MyRadioOnlineBouquetWorker(BaseWorker):
 
     def run(self):
         bouquet_path = os.path.join("/etc/enigma2", constants.MYRADIOONLINE_BOUQUET_FILENAME)
-        bouquets_tv_path = "/etc/enigma2/bouquets.tv"
         try:
             now = datetime.now().strftime("%Y-%m-%d_%H")
             request = urllib.request.Request(
@@ -650,11 +597,8 @@ class MyRadioOnlineBouquetWorker(BaseWorker):
             with urllib.request.urlopen(request, timeout=25) as response:
                 payload = json.loads(response.read().decode("utf-8"))
             radios = payload.get("radios") if isinstance(payload, dict) else []
-            epg_mapper = PanelEpgMapper()
-            epg_mapper.prefetch([radio.get("r_name") for radio in radios if isinstance(radio, dict)])
-            lines = ["#NAME MyRadioOnline (azman)\n"]
+            stations = []
             seen = set()
-            count = 0
             for radio in radios or []:
                 if not isinstance(radio, dict):
                     continue
@@ -670,33 +614,13 @@ class MyRadioOnlineBouquetWorker(BaseWorker):
                 if not name or not candidates:
                     continue
                 candidates.sort(key=lambda item: item[0], reverse=True)
-                bitrate, stream_url = candidates[0]
+                _bitrate, stream_url = candidates[0]
                 if stream_url in seen:
                     continue
                 seen.add(stream_url)
-                safe_name = re.sub(r"[\r\n:]", " ", name).strip()
-                encoded_url = urllib.parse.quote(stream_url, safe="")
-                epg_reference = epg_mapper.reference(safe_name)
-                service_prefix = "4097:%s" % epg_reference if epg_reference else "4097:0:2:0:0:0:0:0:0:0"
-                lines.append("#SERVICE %s:%s:%s\n" % (service_prefix, encoded_url, safe_name))
-                lines.append("#DESCRIPTION %s\n" % safe_name)
-                count += 1
-            if not count:
-                raise ValueError("Nie znaleziono dostępnych stacji radiowych.")
-            utils.atomic_write_lines(bouquet_path, lines)
-            utils.remove_bouquet_and_registration("/etc/enigma2", "userbouquet.azman_iptv_myradioonline.tv")
-            service_line = '#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet' % constants.MYRADIOONLINE_BOUQUET_FILENAME
-            existing = []
-            if os.path.exists(bouquets_tv_path):
-                with open(bouquets_tv_path, "r") as handle:
-                    existing = handle.readlines()
-            if not any(constants.MYRADIOONLINE_BOUQUET_FILENAME in line for line in existing):
-                existing.append(service_line + "\n")
-                utils.atomic_write_lines(bouquets_tv_path, existing)
-            db = eDVBDB.getInstance()
-            db.reloadBouquets()
-            db.reloadServicelist()
-            self.final_message = "Utworzono bukiet MyRadioOnline.\n\nDodano %d stacji radiowych." % count
+                stations.append((name, stream_url))
+            self._write_bouquet(constants.MYRADIOONLINE_BOUQUET_FILENAME, "MyRadioOnline", stations)
+            self.final_message = "Utworzono bukiet MyRadioOnline.\n\nDodano %d stacji radiowych." % len(stations)
         except Exception as error:
             utils.log_error(error, self.__class__.__name__, target=bouquet_path)
             self.error_message = "Nie udało się utworzyć bukietu MyRadioOnline:\n%s" % error
@@ -705,38 +629,14 @@ class MyRadioOnlineBouquetWorker(BaseWorker):
                 self._safe_call_main_thread(getattr(self, "error_message", None), getattr(self, "final_message", None))
 
 
-class PolskieRadioBouquetWorker(BaseWorker):
+class PolskieRadioBouquetWorker(_RadioApiBouquetWorker):
     def __init__(self, callback_finished):
         super(PolskieRadioBouquetWorker, self).__init__(callback_finished)
 
     def run(self):
-        bouquet_name = constants.POLSKIE_RADIO_BOUQUET_FILENAME
-        bouquet_path = os.path.join("/etc/enigma2", bouquet_name)
-        bouquets_tv_path = "/etc/enigma2/bouquets.tv"
+        bouquet_path = os.path.join("/etc/enigma2", constants.POLSKIE_RADIO_BOUQUET_FILENAME)
         try:
-            epg_mapper = PanelEpgMapper()
-            epg_mapper.prefetch([name for name, _stream_url in constants.POLSKIE_RADIO_STREAMS])
-            lines = ["#NAME Polskie Radio (azman)\n"]
-            for name, stream_url in constants.POLSKIE_RADIO_STREAMS:
-                safe_name = re.sub(r"[\r\n:]", " ", name).strip()
-                encoded_url = urllib.parse.quote(stream_url, safe="")
-                epg_reference = epg_mapper.reference(safe_name)
-                service_prefix = "4097:%s" % epg_reference if epg_reference else "4097:0:2:0:0:0:0:0:0:0"
-                lines.append("#SERVICE %s:%s:%s\n" % (service_prefix, encoded_url, safe_name))
-                lines.append("#DESCRIPTION %s\n" % safe_name)
-            utils.atomic_write_lines(bouquet_path, lines)
-            utils.remove_bouquet_and_registration("/etc/enigma2", "userbouquet.azman_iptv_polskieradio.tv")
-            service_line = '#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet' % bouquet_name
-            existing = []
-            if os.path.exists(bouquets_tv_path):
-                with open(bouquets_tv_path, "r") as handle:
-                    existing = handle.readlines()
-            if not any(bouquet_name in line for line in existing):
-                existing.append(service_line + "\n")
-                utils.atomic_write_lines(bouquets_tv_path, existing)
-            db = eDVBDB.getInstance()
-            db.reloadBouquets()
-            db.reloadServicelist()
+            self._write_bouquet(constants.POLSKIE_RADIO_BOUQUET_FILENAME, "Polskie Radio", list(constants.POLSKIE_RADIO_STREAMS))
             self.final_message = "Utworzono bukiet Polskie Radio.\n\nDodano %d stacji radiowych." % len(constants.POLSKIE_RADIO_STREAMS)
         except Exception as error:
             utils.log_error(error, self.__class__.__name__, target=bouquet_path)
@@ -744,35 +644,6 @@ class PolskieRadioBouquetWorker(BaseWorker):
         finally:
             if not self._is_cancelled:
                 self._safe_call_main_thread(getattr(self, "error_message", None), getattr(self, "final_message", None))
-
-
-class _RadioApiBouquetWorker(BaseWorker):
-    def _write_bouquet(self, filename, title, stations):
-        path = os.path.join("/etc/enigma2", filename)
-        lines = ["#NAME %s (azman)\n" % title]
-        mapper = PanelEpgMapper()
-        mapper.prefetch([name for name, _url in stations])
-        for name, url in stations:
-            name = re.sub(r"[\r\n:]", " ", str(name)).strip()
-            encoded = urllib.parse.quote(str(url), safe="")
-            reference = mapper.reference(name)
-            prefix = "4097:%s" % reference if reference else "4097:0:2:0:0:0:0:0:0:0"
-            lines.append("#SERVICE %s:%s:%s\n" % (prefix, encoded, name))
-            lines.append("#DESCRIPTION %s\n" % name)
-        if not stations:
-            raise ValueError("Nie znaleziono dostępnych stacji radiowych.")
-        utils.atomic_write_lines(path, lines)
-        legacy_filename = filename.replace("userbouquet.azmanpanel_", "userbouquet.azman_iptv_", 1)
-        utils.remove_bouquet_and_registration("/etc/enigma2", legacy_filename)
-        bouquets = "/etc/enigma2/bouquets.tv"
-        existing = open(bouquets, "r").readlines() if os.path.exists(bouquets) else []
-        marker = '#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet\n' % filename
-        if not any(filename in line for line in existing):
-            existing.append(marker)
-            utils.atomic_write_lines(bouquets, existing)
-        db = eDVBDB.getInstance()
-        db.reloadBouquets()
-        db.reloadServicelist()
 
 
 class RmfonBouquetWorker(_RadioApiBouquetWorker):
@@ -824,15 +695,11 @@ class EurozetBouquetWorker(_RadioApiBouquetWorker):
             if not self._is_cancelled: self._safe_call_main_thread(getattr(self, "error_message", None), getattr(self, "final_message", None))
 
 
-class LgChannelsPlBouquetWorker(BaseWorker):
+class LgChannelsPlBouquetWorker(_RadioApiBouquetWorker):
     def __init__(self, callback_finished):
         super(LgChannelsPlBouquetWorker, self).__init__(callback_finished)
         self.error_message = None
         self.final_message = None
-
-    def _attribute(self, line, name):
-        match = re.search(r'(?:^|\s)%s="([^"]*)"' % re.escape(name), line)
-        return match.group(1).strip() if match else ""
 
     def _prepare_url(self, url):
         values = {
@@ -856,7 +723,6 @@ class LgChannelsPlBouquetWorker(BaseWorker):
 
     def run(self):
         bouquet_filepath = os.path.join("/etc/enigma2", constants.LGCHANNELSPL_BOUQUET_FILENAME)
-        bouquets_tv_path = "/etc/enigma2/bouquets.tv"
         try:
             request = urllib.request.Request(constants.LGCHANNELSPL_PLAYLIST_URL, headers={
                 "User-Agent": "Mozilla/5.0 (X11; Linux armv7l) AzmanPanel/1.0",
@@ -867,10 +733,8 @@ class LgChannelsPlBouquetWorker(BaseWorker):
                 content = response.read().decode("utf-8-sig", errors="replace")
             if not content.lstrip().startswith("#EXTM3U"):
                 raise ValueError("Pobrana lista LG Channels PL ma nieprawidłowy format.")
-            lines = ["#NAME LG Channels PL (azman)\n"]
             metadata = None
             seen_urls = set()
-            count = 0
             channels = []
             for raw_line in content.splitlines():
                 line = raw_line.strip()
@@ -893,32 +757,13 @@ class LgChannelsPlBouquetWorker(BaseWorker):
                 name = re.sub(r"^\d+\s+", "", name).replace(":", " ").replace("\n", " ")
                 channels.append((name, stream_url))
                 metadata = None
-            epg_mapper = PanelEpgMapper()
-            epg_mapper.prefetch([name for name, _stream_url in channels])
-            for name, stream_url in channels:
-                encoded_url = urllib.parse.quote(stream_url, safe="")
-                epg_reference = epg_mapper.reference(name)
-                service_prefix = "4097:%s" % epg_reference if epg_reference else "4097:0:1:0:0:0:0:0:0:0"
-                lines.append("#SERVICE %s:%s:%s\n" % (service_prefix, encoded_url, name))
-                lines.append("#DESCRIPTION %s\n" % name)
-                count += 1
             if self._is_cancelled:
                 raise InterruptedError()
-            if count == 0:
+            if not channels:
                 raise ValueError("Nie znaleziono kanałów HLS na liście LG Channels PL.")
-            utils.atomic_write_lines(bouquet_filepath, lines)
-            utils.remove_bouquet_and_registration("/etc/enigma2", "userbouquet.azmanplayer_lgchannelspl.tv")
-            existing = []
-            if os.path.exists(bouquets_tv_path):
-                with open(bouquets_tv_path, "r") as handle:
-                    existing = handle.readlines()
-            if not any(constants.LGCHANNELSPL_BOUQUET_FILENAME in line for line in existing):
-                existing.append('#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet\n' % constants.LGCHANNELSPL_BOUQUET_FILENAME)
-                utils.atomic_write_lines(bouquets_tv_path, existing)
-            db = eDVBDB.getInstance()
-            db.reloadBouquets()
-            db.reloadServicelist()
-            self.final_message = "Utworzono bukiet LG Channels PL.\n\nDodano %d kanałów." % count
+            self._write_bouquet(constants.LGCHANNELSPL_BOUQUET_FILENAME, "LG Channels PL", channels,
+                                 service_type="1", legacy_filename="userbouquet.azmanplayer_lgchannelspl.tv")
+            self.final_message = "Utworzono bukiet LG Channels PL.\n\nDodano %d kanałów." % len(channels)
         except InterruptedError:
             self.error_message = "Operacja anulowana przez użytkownika."
         except Exception as error:
@@ -929,7 +774,7 @@ class LgChannelsPlBouquetWorker(BaseWorker):
                 self._safe_call_main_thread(self.error_message, self.final_message)
 
 
-class IptvOrgWorker(BaseWorker):
+class IptvOrgWorker(_RadioApiBouquetWorker):
     def __init__(self, callback_finished):
         super(IptvOrgWorker, self).__init__(callback_finished)
         self.error_message = None
@@ -937,19 +782,15 @@ class IptvOrgWorker(BaseWorker):
 
     def run(self):
         m3u_url = "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/pl.m3u"
-        bouquet_filename = constants.IPTVORG_BOUQUET_FILENAME
-        bouquet_filepath = os.path.join("/etc/enigma2", bouquet_filename)
-        bouquets_tv_path = "/etc/enigma2/bouquets.tv"
-        
+        bouquet_filepath = os.path.join("/etc/enigma2", constants.IPTVORG_BOUQUET_FILENAME)
+
         try:
             with urllib.request.urlopen(m3u_url, timeout=20) as response:
                 m3u_content = response.read().decode('utf-8')
 
             if self._is_cancelled: raise InterruptedError()
-            
-            bouquet_lines = ["#NAME IPTV.ORG Poland\n"]
+
             channels = []
-            
             lines = m3u_content.splitlines()
             for i, line in enumerate(lines):
                 if line.startswith("#EXTINF:-1"):
@@ -959,55 +800,24 @@ class IptvOrgWorker(BaseWorker):
                             channel_name = line.split(',')[-1]
                         else:
                             channel_name = channel_name.group(1)
-                        
+
                         stream_url = lines[i+1].strip()
-                        
+
                         if channel_name and stream_url:
-                            
                             cleaned_name = channel_name.replace(':', ' ')
-                            
-                            
-                            
                             channels.append((cleaned_name, stream_url))
                     except IndexError:
                         continue
 
-            epg_mapper = PanelEpgMapper()
-            epg_mapper.prefetch([name for name, _stream_url in channels])
-            for cleaned_name, stream_url in channels:
-                encoded_url = urllib.parse.quote(stream_url)
-                epg_reference = epg_mapper.reference(cleaned_name)
-                service_prefix = "4097:%s" % epg_reference if epg_reference else "4097:0:1:0:0:0:0:0:0:0"
-                bouquet_lines.append(f"#SERVICE {service_prefix}:{encoded_url}:{cleaned_name}\n")
-                bouquet_lines.append(f"#DESCRIPTION {cleaned_name}\n")
-            channel_count = len(channels)
-            
             if self._is_cancelled: raise InterruptedError()
 
-            if channel_count == 0:
+            if not channels:
                 raise ValueError("Nie znaleziono żadnych kanałów w pobranej liście M3U.")
-            
-            utils.atomic_write_lines(bouquet_filepath, bouquet_lines)
-            utils.remove_bouquet_and_registration("/etc/enigma2", "userbouquet.iptv-org-pl.tv")
-                
-            service_line_to_add = f'#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "{bouquet_filename}" ORDER BY bouquet'
-            main_bouquet_lines = []
-            found = False
-            if os.path.exists(bouquets_tv_path):
-                with open(bouquets_tv_path, "r") as f:
-                    main_bouquet_lines = f.readlines()
-                if any(bouquet_filename in line for line in main_bouquet_lines):
-                    found = True
-            
-            if not found:
-                main_bouquet_lines.append(service_line_to_add + "\n")
-                utils.atomic_write_lines(bouquets_tv_path, main_bouquet_lines)
 
-            db = eDVBDB.getInstance()
-            db.reloadBouquets()
-            db.reloadServicelist()
-            
-            self.final_message = f"Utworzono bukiet IPTV.ORG Poland.\n\nDodano {channel_count} kanałów.\nLista kanałów została odświeżona."
+            self._write_bouquet(constants.IPTVORG_BOUQUET_FILENAME, "IPTV.ORG Poland", channels,
+                                 service_type="1", legacy_filename="userbouquet.iptv-org-pl.tv", name_suffix="")
+
+            self.final_message = f"Utworzono bukiet IPTV.ORG Poland.\n\nDodano {len(channels)} kanałów.\nLista kanałów została odświeżona."
 
         except InterruptedError:
             self.error_message = "Operacja anulowana przez użytkownika."
