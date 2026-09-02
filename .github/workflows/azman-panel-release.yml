@@ -1,1 +1,133 @@
+name: Azman Panel - build i release
 
+# Uruchamia się automatycznie, gdy publikujesz Release na GitHubie (tak jak
+# robisz to teraz ręcznie) - buduje IPK w tym samym obrazie Dockera co
+# lokalnie (00 AzmanPanel/packaging), wgrywa go jako załącznik do tego
+# Release'u i aktualizuje feed/manifest.json (wersja, suma SHA-256, URL).
+#
+# "workflow_dispatch" pozwala też odpalić sam build ręcznie (zakładka
+# Actions -> ten workflow -> Run workflow) bez tworzenia Release'u - wtedy
+# gotowy plik .ipk trafia jako artefakt workflow, nic nie jest publikowane
+# ani commitowane.
+#
+# Założenie: tag Release'u ma postać "v<wersja>" (np. v2026.09.02-1346),
+# tak jak w obecnych wpisach feed/manifest.json. Jeśli tagujesz inaczej,
+# popraw krok "Ustal wersję" poniżej.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Wersja do zbudowania (np. 2026.09.02-1346). Puste = bieżący czas UTC."
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ustal wersję
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [ -n "${{ github.event.release.tag_name }}" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="$(date -u +%Y.%m.%d-%H%M)"
+          fi
+          echo "Wersja builda: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Zbuduj obraz buildera
+        run: docker build -t azman-panel-ipk "00 AzmanPanel/packaging"
+
+      - name: Zbuduj IPK
+        run: |
+          mkdir -p build/ipk
+          docker run --rm \
+            -e VERSION="${{ steps.version.outputs.version }}" \
+            -v "${{ github.workspace }}/00 AzmanPanel:/source:ro" \
+            -v "${{ github.workspace }}/build/ipk:/output" \
+            azman-panel-ipk
+
+      - name: Znajdź zbudowany plik i policz sumę SHA-256
+        id: artifact
+        run: |
+          IPK_PATH=$(find build/ipk -name '*.ipk')
+          if [ -z "$IPK_PATH" ] || [ ! -f "$IPK_PATH" ]; then
+            echo "Nie znaleziono zbudowanego pliku .ipk" >&2
+            exit 1
+          fi
+          SHA256=$(sha256sum "$IPK_PATH" | awk '{print $1}')
+          echo "Zbudowano: $IPK_PATH (sha256=$SHA256)"
+          echo "path=$IPK_PATH" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$IPK_PATH")" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Wgraj IPK jako artefakt workflow (tylko workflow_dispatch)
+        if: github.event_name != 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: azman-panel-ipk
+          path: ${{ steps.artifact.outputs.path }}
+
+      - name: Wgraj IPK do Release'u
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "${{ steps.artifact.outputs.path }}" --clobber
+
+      - name: Zaktualizuj feed/manifest.json
+        if: github.event_name == 'release'
+        run: |
+          python3 - "${{ github.repository }}" "${{ github.event.release.tag_name }}" "${{ steps.version.outputs.version }}" "${{ steps.artifact.outputs.name }}" "${{ steps.artifact.outputs.sha256 }}" <<'PYEOF'
+          import json
+          import sys
+          from datetime import datetime, timezone
+
+          repo, tag, version, ipk_name, sha256 = sys.argv[1:6]
+          path = "feed/manifest.json"
+
+          with open(path, encoding="utf-8") as handle:
+              manifest = json.load(handle)
+
+          for entry in manifest["packages"]:
+              if entry["id"] == "azman-panel":
+                  entry["version"] = version
+                  entry["variants"]["all"]["ipk"] = f"all/{ipk_name}"
+                  entry["variants"]["all"]["url"] = (
+                      f"https://github.com/{repo}/releases/download/{tag}/{ipk_name}"
+                  )
+                  entry["variants"]["all"]["sha256"] = sha256
+                  break
+          else:
+              raise SystemExit("Nie znaleziono wpisu azman-panel w feed/manifest.json")
+
+          manifest["updated"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+          with open(path, "w", encoding="utf-8") as handle:
+              json.dump(manifest, handle, ensure_ascii=False, indent=2)
+              handle.write("\n")
+          PYEOF
+
+      - name: Commituj zaktualizowany manifest
+        if: github.event_name == 'release'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add feed/manifest.json
+          if git diff --cached --quiet; then
+            echo "Manifest bez zmian, pomijam commit."
+          else
+            git commit -m "feed: azman-panel ${{ steps.version.outputs.version }}"
+            git push origin HEAD:main
+          fi
