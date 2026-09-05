@@ -435,10 +435,46 @@ class PrivateBouquetListWorker(BaseWorker):
         finally:
             self._safe_call_main_thread(error_message, bouquet_filenames)
 
+class BouquetWrapperDetectionWorker(BaseWorker):
+    """Pobiera zawartość wybranych bukietów i sprawdza, czy zawierają wpisy
+    YT-DLP Wrapper / YT-DL Wrapper - zanim user zdecyduje, czy przekonwertować
+    je na obsługę przez streamlink."""
+
+    def __init__(self, selected_bouquets, callback_finished):
+        super(BouquetWrapperDetectionWorker, self).__init__(callback_finished)
+        self.selected_bouquets = selected_bouquets
+
+    def run(self):
+        error_message = None
+        wrapper_bouquets = []
+        try:
+            for source_filename in self.selected_bouquets:
+                if self._is_cancelled:
+                    raise InterruptedError("Detection cancelled")
+                validated = utils.validate_bouquet_filename(source_filename)
+                query = urllib.parse.urlencode({"name": validated})
+                with urllib.request.urlopen(constants.BOUQUET_URL_API + "?" + query, timeout=20) as response:
+                    access = json.loads(response.read().decode("utf-8"))
+                download_url = access.get("url")
+                if not download_url:
+                    raise ValueError("Serwer nie udostępnił wybranego bukietu.")
+                with urllib.request.urlopen(download_url, timeout=20) as response:
+                    content = response.read().decode("utf-8", errors="replace")
+                if utils.YT_WRAPPER_SCHEME_RE.search(content):
+                    wrapper_bouquets.append(source_filename)
+        except InterruptedError:
+            error_message = "Sprawdzanie zawartości anulowane przez użytkownika."
+        except Exception as error:
+            utils.log_error(error, self.__class__.__name__, selected_bouquets=self.selected_bouquets)
+            error_message = "Wystąpił błąd podczas sprawdzania bukietu: %s" % error
+        finally:
+            self._safe_call_main_thread(error_message, wrapper_bouquets)
+
 class PrivateBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
-    def __init__(self, selected_bouquets, callback_progress, callback_finished):
+    def __init__(self, selected_bouquets, callback_progress, callback_finished, convert_to_streamlink=None):
         super(PrivateBouquetInstallWorker, self).__init__(callback_finished)
         self.selected_bouquets = selected_bouquets
+        self.convert_to_streamlink = set(convert_to_streamlink or ())
         self.callback_progress = callback_progress
         self._init_progress()
 
@@ -460,7 +496,13 @@ class PrivateBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
                 if not download_url:
                     raise ValueError("Serwer nie udostępnił wybranego bukietu.")
                 target_path = os.path.join(target_dir, filename)
-                urllib.request.urlretrieve(download_url, target_path, reporthook=self._internal_reporthook)
+                if source_filename in self.convert_to_streamlink:
+                    with urllib.request.urlopen(download_url, timeout=20) as response:
+                        content = response.read().decode("utf-8")
+                    content = utils.convert_yt_wrapper_entries_to_streamlink(content)
+                    utils.atomic_write_lines(target_path, [content])
+                else:
+                    urllib.request.urlretrieve(download_url, target_path, reporthook=self._internal_reporthook)
                 if source_filename != filename:
                     utils.remove_bouquet_and_registration(target_dir, source_filename)
 

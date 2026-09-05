@@ -130,9 +130,9 @@
         <widget source="key_green" render="Label" position="90,780" size="360,54" font="Regular;33" valign="center" foregroundColor="green" transparent="1" />
     </screen>
     <screen name="PackageTileSelectionScreen" position="center,center" size="1920,1080" title="Wybierz elementy" backgroundColor="#00000000" flags="wfNoBorder">
-        <eLabel position="0,0" size="1920,123" backgroundColor="#CC080D12" zPosition="-1" />
-        <eLabel position="0,123" size="1920,844" backgroundColor="#B3080D12" zPosition="-1" />
-        <eLabel position="0,968" size="1920,112" backgroundColor="#CC080D12" zPosition="-1" />
+        <eLabel position="0,0" size="1920,123" backgroundColor="#1A000000" zPosition="-1" />
+        <eLabel position="0,123" size="1920,844" backgroundColor="#33000000" zPosition="-1" />
+        <eLabel position="0,968" size="1920,112" backgroundColor="#1A000000" zPosition="-1" />
         <widget source="title" render="Label" position="30,18" size="1860,57" font="Regular;45" halign="left" valign="center" foregroundColor="#39c0e0" transparent="1" />
         <eLabel position="30,87" size="1860,3" backgroundColor="#00bcd4" />
         <widget name="selection_info" position="30,96" size="1860,33" font="Regular;24" halign="center" foregroundColor="#39c0e0" transparent="1" />

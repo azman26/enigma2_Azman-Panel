@@ -19,7 +19,7 @@ from enigma import eTimer, eConsoleAppContainer, gRGB
 
 from . import constants, runtime, utils
 from .azman_ui import load_responsive_skin
-from .workers import PiconZipListWorker, PiconInstallationWorker, PrivateBouquetListWorker, PrivateBouquetInstallWorker, IptvBouquetUninstallWorker, IptvOrgWorker, LgChannelsPlBouquetWorker, MyRadioOnlineBouquetWorker, PolskieRadioBouquetWorker, RmfonBouquetWorker, EurozetBouquetWorker, PackageListWorker, ManifestPackageDownloadWorker, ManifestUpdateCheckWorker, SatellitesXmlUpdateWorker
+from .workers import PiconZipListWorker, PiconInstallationWorker, PrivateBouquetListWorker, PrivateBouquetInstallWorker, BouquetWrapperDetectionWorker, IptvBouquetUninstallWorker, IptvOrgWorker, LgChannelsPlBouquetWorker, MyRadioOnlineBouquetWorker, PolskieRadioBouquetWorker, RmfonBouquetWorker, EurozetBouquetWorker, PackageListWorker, ManifestPackageDownloadWorker, ManifestUpdateCheckWorker, SatellitesXmlUpdateWorker
 from .config import config, save_config
 
 PLUGIN_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -1103,7 +1103,7 @@ class AzmanPanelMainScreen(Screen):
         def after_messagebox_callback(result):
             if hasattr(self, 'progress_screen') and self.progress_screen:
                 self.progress_screen.close()
-            self._open_picon_selection_screen()
+            self._defer_action(self._open_picon_selection_screen)
         self.session.openWithCallback(after_messagebox_callback, MessageBox, f"Zakończono instalację picon.\n\n{final_message}", type=MessageBox.TYPE_INFO)
 
     def start_satellites_xml_update(self):
@@ -1279,11 +1279,55 @@ class AzmanPanelMainScreen(Screen):
     
     def on_iptv_bouquets_selected_for_install(self, selected_bouquets):
         if not selected_bouquets: return
-        self._defer_action(lambda: self._start_iptv_bouquet_install(selected_bouquets))
+        self._defer_action(lambda: self._start_wrapper_detection(selected_bouquets))
 
-    def _start_iptv_bouquet_install(self, selected_bouquets):
+    def _start_wrapper_detection(self, selected_bouquets):
+        self.download_messagebox = self.session.open(
+            MessageBox, "Sprawdzanie zawartości bukietu…", type=MessageBox.TYPE_INFO
+        )
+        self.current_worker = BouquetWrapperDetectionWorker(
+            selected_bouquets,
+            lambda error_message, wrapper_bouquets: self._on_wrapper_detection_finished(
+                selected_bouquets, error_message, wrapper_bouquets
+            ),
+        )
+        self.current_worker.start()
+
+    def _on_wrapper_detection_finished(self, selected_bouquets, error_message, wrapper_bouquets):
+        self.current_worker = None
+        if getattr(self, "download_messagebox", None):
+            self.download_messagebox.close()
+            self.download_messagebox = None
+        if error_message:
+            self._defer_action(lambda: self.session.open(MessageBox, error_message, MessageBox.TYPE_ERROR))
+            return
+        if wrapper_bouquets:
+            self._defer_action(lambda: self._ask_streamlink_conversion(selected_bouquets, wrapper_bouquets))
+        else:
+            self._defer_action(lambda: self._start_iptv_bouquet_install(selected_bouquets))
+
+    def _ask_streamlink_conversion(self, selected_bouquets, wrapper_bouquets):
+        names = ", ".join(
+            utils.panel_bouquet_filename(name).replace("userbouquet.azmanpanel_", "").replace(".tv", "").replace("_", " ").title()
+            for name in wrapper_bouquets
+        )
+        self.session.openWithCallback(
+            lambda confirmed: self._start_iptv_bouquet_install(
+                selected_bouquets, set(wrapper_bouquets) if confirmed else None
+            ),
+            MessageBox,
+            "Instalowany bukiet (%s) zawiera wpisy wykorzystujące YT-DLP Wrapper oraz YT-DL Wrapper.\n\n"
+            "Czy przekonwertować te wpisy na obsługę przez Streamlink (http://127.0.0.1:8088/)?\n\n"
+            "Wybór NIE zainstaluje bukiet z oryginalnymi wpisami, bez zmian." % names,
+            MessageBox.TYPE_YESNO, default=True,
+        )
+
+    def _start_iptv_bouquet_install(self, selected_bouquets, convert_to_streamlink=None):
         self.progress_screen = self.session.open(DownloadProgressScreen, title="Instalowanie bukietów...")
-        self.current_worker = PrivateBouquetInstallWorker(selected_bouquets, self.progress_screen.setProgress, self.on_iptv_bouquet_installation_finished)
+        self.current_worker = PrivateBouquetInstallWorker(
+            selected_bouquets, self.progress_screen.setProgress, self.on_iptv_bouquet_installation_finished,
+            convert_to_streamlink=convert_to_streamlink,
+        )
         self.progress_screen.parent_worker = self.current_worker
         self.current_worker.start()
 
@@ -1302,7 +1346,7 @@ class AzmanPanelMainScreen(Screen):
         def after_messagebox_callback(result):
             if hasattr(self, 'progress_screen') and self.progress_screen:
                 self.progress_screen.close()
-            self.open_iptv_bouquet_manager()
+            self._defer_action(self.open_iptv_bouquet_manager)
         message = error_message or final_message
         message_type = MessageBox.TYPE_ERROR if error_message else MessageBox.TYPE_INFO
         self.session.openWithCallback(after_messagebox_callback, MessageBox, message, type=message_type)

@@ -13,6 +13,10 @@ LOG_FILE = "/tmp/Azman_Panel.log"
 MAX_LOG_SIZE = 512 * 1024
 LOG_TAIL_SIZE = 384 * 1024
 BOUQUET_FILENAME_RE = re.compile(r"^userbouquet\.[A-Za-z0-9._-]+\.tv$")
+YT_WRAPPER_STREAMLINK_PREFIX = "http%3a//127.0.0.1%3a8088/"
+# W bukietach adresy mają zakodowane dwukropki jako %3a (np. "YT-DLP%3a//https%3a//..."),
+# ale dopuszczamy też literalne "://" na wypadek bukietu bez tego kodowania.
+YT_WRAPPER_SCHEME_RE = re.compile(r"(?:YT-DLP|YT-DL)(?::|%3a)//", re.IGNORECASE)
 
 def _sanitize_log_value(key, value):
     if str(key).lower() in ("token", "authorization", "password", "secret", "url", "source", "source_url"):
@@ -66,6 +70,12 @@ def panel_bouquet_filename(filename):
         name = "iptvorg_pl"
     name = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "lista"
     return "userbouquet.azmanpanel_%s.tv" % name
+
+def convert_yt_wrapper_entries_to_streamlink(text):
+    """Zamienia wpisy YT-DLP://<url> / YT-DL://<url> (obsługiwane przez wrapper
+    serviceapp) na http://127.0.0.1:8088/<url>, czyli lokalny proxy streamlink.
+    Wpisy bez tego schematu (np. zwykłe http://) zostają bez zmian."""
+    return YT_WRAPPER_SCHEME_RE.sub(YT_WRAPPER_STREAMLINK_PREFIX, text)
 
 def atomic_write_lines(path, lines, encoding="utf-8"):
     """Zapisuje plik przez plik tymczasowy, aby uniknąć pustej konfiguracji."""
