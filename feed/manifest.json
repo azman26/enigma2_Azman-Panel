@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "repository": "Azman Feed",
-  "updated": "2026-09-02T21:24:37Z",
+  "updated": "2026-09-05T14:44:48Z",
   "packages": [
     {
       "id": "azman-panel",
@@ -166,7 +166,7 @@
     {
       "id": "freetvplayer",
       "name": "FreeTV Player",
-      "version": "2026.09.02-2118",
+      "version": "2026.09.05-1639",
       "category": "Pluginy",
       "description": "Odtwarzacz bezpłatnych kanałów internetowych i generator bukietów Enigma2 dla dostępnych providerów.",
       "python": ["3.12", "3.13", "3.14"],
@@ -174,16 +174,16 @@
       "package": "enigma2-plugin-extensions--azman-freetvplayer",
       "variants": {
         "py312": {
-          "ipk": "py312/enigma2-plugin-extensions--azman-freetvplayer-py312_2026.09.02-2118_all.ipk",
-          "sha256": "f58928013da8d0b2629341707e9e74c6bf4cd15bcc4777ab745cc0ba5d8e7467"
+          "ipk": "py312/enigma2-plugin-extensions--azman-freetvplayer-py312_2026.09.05-1639_all.ipk",
+          "sha256": "e098547e279f0bab2493b961958046f8f6afcda54c4b72fb8f7c33c83ba7ddfe"
         },
         "py313": {
-          "ipk": "py313/enigma2-plugin-extensions--azman-freetvplayer-py313_2026.09.02-2118_all.ipk",
-          "sha256": "609ede1a111b8b4f61ee010537f688d21eb46c786c926e4398e2e5c35f7162e6"
+          "ipk": "py313/enigma2-plugin-extensions--azman-freetvplayer-py313_2026.09.05-1639_all.ipk",
+          "sha256": "b908186ee4278ef54b542195139a3ea9cedf26dd257b80c2c91858e40f0acbf2"
         },
         "py314": {
-          "ipk": "py314/enigma2-plugin-extensions--azman-freetvplayer-py314_2026.09.02-2118_all.ipk",
-          "sha256": "5649cc9e2eabd8f1c860fff83813a1063660ce626ac869eb8cd19e003a8e2db1"
+          "ipk": "py314/enigma2-plugin-extensions--azman-freetvplayer-py314_2026.09.05-1639_all.ipk",
+          "sha256": "cf6d0ae142257bddcc0427bb32daefd30493d6a92a8ef6f8d01b9956f7eee1c3"
         }
       },
       "protected": true
