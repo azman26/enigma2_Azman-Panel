@@ -18,6 +18,7 @@ from datetime import datetime
 from enigma import eTimer, eDVBDB
 from . import constants, utils, runtime
 from .epg_mapper import PanelEpgMapper
+from .epg_events import import_events_async as import_epg_events_async
 
 
 def derive_package_names(entry):
@@ -606,6 +607,7 @@ class _RadioApiBouquetWorker(BaseWorker):
         db = eDVBDB.getInstance()
         db.reloadBouquets()
         db.reloadServicelist()
+        import_epg_events_async(logger=lambda message: utils.log_event("EPG events: %s" % message))
 
 
 class MyRadioOnlineBouquetWorker(_RadioApiBouquetWorker):

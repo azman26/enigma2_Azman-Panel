@@ -1200,6 +1200,7 @@ class AzmanPanelMainScreen(Screen):
         if error_message:
             self.session.open(MessageBox, message, MessageBox.TYPE_ERROR)
         else:
+            message += "\n\nDane EPG są pobierane w tle - pojawią się przy kanałach za kilka minut."
             self.session.open(MessageBox, message, MessageBox.TYPE_INFO, timeout=10)
 
     def start_polskieradio_bouquet(self):
@@ -1759,6 +1760,8 @@ class AzmanPanelMainScreen(Screen):
         self.current_worker = None
         message = final_message or error_message
         msg_type = MessageBox.TYPE_ERROR if error_message else MessageBox.TYPE_INFO
+        if not error_message:
+            message += "\n\nDane EPG są pobierane w tle - pojawią się przy kanałach za kilka minut."
         self.session.open(MessageBox, message, type=msg_type)
 
     def start_archivczsk_install(self):

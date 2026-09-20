@@ -56,6 +56,25 @@ class PrivateEpgApiClient(object):
                 self._request(requested[offset:offset + self.MAX_CHANNELS_PER_REQUEST])
         return {name: self.cache.get(name, "") for name in names if self.cache.get(name)}
 
+    @staticmethod
+    def _describe_error(error):
+        # Bez tego log pokazywal tylko "HTTPError" bez kodu statusu (403/404/
+        # 429/503...), wiec kazda awaria wygladala identycznie i trzeba bylo
+        # recznie odpytywac API, zeby ustalic prawdziwa przyczyne.
+        detail = error.__class__.__name__
+        status = getattr(error, "code", None)
+        if status:
+            detail += " status=%s" % status
+            try:
+                body = error.read()
+                if body:
+                    text = body.decode("utf-8", "replace").strip()[:200]
+                    if text:
+                        detail += " body=%s" % text
+            except Exception:
+                pass
+        return detail
+
     def _request(self, names):
         config = self._config()
         payload = json.dumps({
@@ -85,6 +104,6 @@ class PrivateEpgApiClient(object):
             resolved_count = sum(1 for name in names if self.cache.get(name))
             self._log("private EPG API resolved %d of %d references" % (resolved_count, len(names)))
         except Exception as error:
-            self._log("private EPG API failed: %s" % error.__class__.__name__)
+            self._log("private EPG API failed: %s" % self._describe_error(error))
             for name in names:
                 self.cache[name] = ""
