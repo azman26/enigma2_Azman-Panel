@@ -5,7 +5,7 @@
 
 
 PLUGIN_NAME = "Azman Panel"
-PLUGIN_VERSION = "2026.09.20-2139"
+PLUGIN_VERSION = "2026.09.21-1043"
 
 
 FEED_CONF_URL = "https://raw.githubusercontent.com/azman26/azman-enigma2-repo/main/azman-feed.conf"

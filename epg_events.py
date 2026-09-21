@@ -9,14 +9,24 @@ import json
 import os
 import threading
 import time
+import uuid
 
 try:
     from urllib.request import Request, urlopen
+    from urllib.error import HTTPError
 except ImportError:
-    from urllib2 import Request, urlopen
+    from urllib2 import Request, urlopen, HTTPError
 
 
 ACCESS_FILE = "/etc/AzmanPanel/epg_access.json"
+# Ten sam mechanizm samorejestracji co w epg_private.py - zeby import_events()
+# tez samo-naprawialo sie, niezaleznie od tego, czy proces mapowania
+# referencji zdazyl juz zarejestrowac ten box, czy nie (np. timer 12h moglby
+# odpalic sie jako pierwszy, przed jakimkolwiek zapisem bukietu).
+REGISTER_URL = "https://www.topolowa4.pl/api/register-epg-client.php"
+REGISTER_APP_KEY = "azman-epg-client-2026"
+EPG_MAP_URL = "https://www.topolowa4.pl/api/epg-map.php"
+REGISTER_RETRY_SECONDS = 3600
 BOUQUET_GLOB = "/etc/enigma2/userbouquet.azmanpanel_*"
 MAX_CHANNELS_PER_REQUEST = 25
 MAX_DESC_LEN = 400
@@ -54,7 +64,77 @@ def _config():
         return {}
 
 
-def available():
+def _save_config(data):
+    try:
+        directory = os.path.dirname(ACCESS_FILE)
+        if directory and not os.path.isdir(directory):
+            os.makedirs(directory)
+        temporary = ACCESS_FILE + ".tmp"
+        with open(temporary, "w") as handle:
+            json.dump(data, handle)
+        os.chmod(temporary, 0o600)
+        replace = getattr(os, "replace", os.rename)
+        replace(temporary, ACCESS_FILE)
+    except Exception:
+        pass
+
+
+def _ensure_registered(logger):
+    data = _config()
+    if (
+        data.get("enabled") is True
+        and str(data.get("url") or "").startswith("https://")
+        and str(data.get("token") or "").strip()
+        and str(data.get("box_id") or "").strip()
+    ):
+        return
+    last_attempt = float(data.get("_register_attempted_at") or 0)
+    if time.time() - last_attempt < REGISTER_RETRY_SECONDS:
+        return
+    box_id = str(data.get("box_id") or "").strip()
+    if not box_id:
+        box_id = uuid.uuid4().hex
+        data["box_id"] = box_id
+        _save_config(data)
+    try:
+        payload = json.dumps({"box_id": box_id}).encode("utf-8")
+        request = Request(REGISTER_URL, data=payload, headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "X-Azman-App-Key": REGISTER_APP_KEY,
+            "User-Agent": "AzmanPanel-EPGRegister/1",
+        })
+        response = urlopen(request, timeout=15)
+        try:
+            result = json.loads(response.read().decode("utf-8"))
+        finally:
+            response.close()
+        token = str(result.get("token") or "").strip()
+        if not token:
+            raise ValueError("empty token in response")
+        data.update({
+            "enabled": True, "url": EPG_MAP_URL, "token": token,
+            "box_id": box_id, "timeout": 12,
+        })
+        data.pop("_register_attempted_at", None)
+        _save_config(data)
+        logger("self-registration succeeded box_id=%s" % box_id)
+    except Exception as error:
+        data["_register_attempted_at"] = time.time()
+        _save_config(data)
+        logger("self-registration failed: %s" % _describe_error(error))
+
+
+def _invalidate_and_retry_registration():
+    data = _config()
+    data["enabled"] = False
+    data.pop("token", None)
+    data.pop("_register_attempted_at", None)
+    _save_config(data)
+
+
+def available(logger=None):
+    _ensure_registered(logger or (lambda _message: None))
     data = _config()
     return bool(
         data.get("enabled") is True
@@ -145,6 +225,11 @@ def _request_events(base_url, config, references, logger):
             response.close()
         events = result.get("events") if isinstance(result, dict) else {}
         return events if isinstance(events, dict) else {}
+    except HTTPError as error:
+        if error.code == 403:
+            _invalidate_and_retry_registration()
+        logger("events request failed: %s" % _describe_error(error))
+        return {}
     except Exception as error:
         logger("events request failed: %s" % _describe_error(error))
         return {}
@@ -177,7 +262,7 @@ def import_events(logger=None, epgcache=None):
     - liczbe kanalow z dopasowanymi eventami i sumaryczna liczbe wstrzykniete
     zdarzen, do logowania przez wywolujacego."""
     logger = logger or (lambda _message: None)
-    if not available():
+    if not available(logger):
         logger("EPG events: disabled - private API access not configured")
         return 0, 0
 
