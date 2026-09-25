@@ -19,7 +19,7 @@ from enigma import eTimer, eConsoleAppContainer, gRGB
 
 from . import constants, runtime, utils
 from .azman_ui import load_responsive_skin
-from .workers import PiconZipListWorker, PiconInstallationWorker, PrivateBouquetListWorker, PrivateBouquetInstallWorker, BouquetWrapperDetectionWorker, IptvBouquetUninstallWorker, IptvOrgWorker, LgChannelsPlBouquetWorker, MyRadioOnlineBouquetWorker, PolskieRadioBouquetWorker, RmfonBouquetWorker, EurozetBouquetWorker, PackageListWorker, ManifestPackageDownloadWorker, ManifestUpdateCheckWorker, SatellitesXmlUpdateWorker
+from .workers import PiconZipListWorker, PiconInstallationWorker, PrivateBouquetListWorker, PrivateBouquetInstallWorker, BouquetWrapperDetectionWorker, IptvBouquetUninstallWorker, IptvOrgWorker, LgChannelsPlBouquetWorker, MyRadioOnlineBouquetWorker, PolskieRadioBouquetWorker, RmfonBouquetWorker, EurozetBouquetWorker, ManifestPackageDownloadWorker, ManifestUpdateCheckWorker, SatellitesXmlUpdateWorker
 from .config import config, save_config
 
 PLUGIN_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -339,87 +339,6 @@ class PiconPathSelectionScreen(Screen):
         if selection: self.close(selection[1])
     def keyCancel(self): self.close(None)
 
-class AzmanFeedScreen(Screen):
-    def __init__(self, session, title="Azman Feed - Menedżer pakietów", filter_keywords=None):
-        Screen.__init__(self, session)
-        self.filter_keywords = filter_keywords
-        self.setTitle(title)
-        self.packages = []
-        self.worker = None
-        self["title"] = StaticText(title)
-        self["description"] = Label("Wczytywanie listy pakietów...")
-        self["key_green"] = StaticText("Zainstaluj")
-        self["key_red"] = StaticText("Odinstaluj")
-        self["key_yellow"] = StaticText("Odśwież")
-        self["list"] = MenuList([])
-        self["actions"] = ActionMap(["OkCancelActions", "ColorActions"], {"ok": self.handle_action, "cancel": self.close, "green": self.install_package, "red": self.remove_package, "yellow": self.refresh_list}, -1)
-        self["list"].onSelectionChanged.append(self.on_selection_changed)
-        self.onLayoutFinish.append(self.refresh_list)
-        self.onClose.append(self.__onClose)
-
-    def __onClose(self):
-        if self.worker and self.worker.is_alive(): self.worker.cancel()
-
-    def refresh_list(self):
-        self["description"].setText("Aktualizowanie listy pakietów...")
-        self["list"].setList([])
-        self.worker = PackageListWorker(callback_finished=self._on_package_list_ready)
-        self.worker.start()
-
-    def _on_package_list_ready(self, error_message, packages):
-        self.worker = None
-        if error_message:
-            self.session.open(MessageBox, error_message, type=MessageBox.TYPE_ERROR)
-            self["description"].setText(error_message)
-            return
-        if self.filter_keywords:
-            filtered_packages = []
-            for pkg in packages:
-                pkg_name_lower = pkg.get('name', '').lower()
-                if any(keyword.lower() in pkg_name_lower for keyword in self.filter_keywords):
-                    filtered_packages.append(pkg)
-            self.packages = sorted(filtered_packages, key=lambda p: p['name'])
-        else:
-            self.packages = sorted(packages, key=lambda p: p['name'])
-        if not self.packages:
-            msg = "Nie znaleziono żadnych pasujących pakietów." if self.filter_keywords else "Brak dostępnych pakietów."
-            self["description"].setText(msg)
-            self["list"].setList([])
-        else:
-            menu_list = [(f"{p['name']} ({p['version']}) - [{p['status']}]", p) for p in self.packages]
-            self["list"].setList(menu_list)
-        self.on_selection_changed()
-
-    def on_selection_changed(self):
-        current = self["list"].getCurrent()
-        if current:
-            self["description"].setText(current[1].get('description', 'Brak opisu.'))
-        else:
-            msg = "Nie znaleziono żadnych pasujących pakietów." if self.filter_keywords else "Brak dostępnych pakietów."
-            self["description"].setText(msg)
-
-    def handle_action(self):
-        current = self["list"].getCurrent()
-        if not current: return
-        self.install_package() if current[1]['status'] != 'Zainstalowany' else self.remove_package()
-
-    def install_package(self): self._run_opkg_command("install")
-    def remove_package(self): self._run_opkg_command("remove")
-
-    def _run_opkg_command(self, action):
-        current = self["list"].getCurrent()
-        if not current: return
-        pkg = current[1]
-        if action == "install" and pkg['status'] == 'Zainstalowany':
-            self.session.open(MessageBox, "Ten pakiet jest już zainstalowany.", type=MessageBox.TYPE_INFO)
-            return
-        if action == "remove" and pkg['status'] != 'Zainstalowany':
-            self.session.open(MessageBox, "Ten pakiet nie jest zainstalowany.", type=MessageBox.TYPE_INFO)
-            return
-        command = f"opkg {action} {pkg['name']}"
-        title = f"{'Instalowanie' if action == 'install' else 'Odinstalowywanie'}: {pkg['name']}"
-        self.session.openWithCallback(self.refresh_list, OpkgCommandScreen, command=command, title=title)
-
 class AzmanPanelMainScreen(Screen):
     COMING_SOON_NAMES = (
         "Bukiety FAST", "Polskie źródła EPG",
@@ -449,8 +368,7 @@ class AzmanPanelMainScreen(Screen):
         self.current_tab_index = 0
         self.markerPixmap = LoadPixmap(f"{PLUGIN_PATH}/icons/marker-cyan.png")
         self.selected_pos = (0, 0)
-        self.params_for_screen_after_install = None
-        
+
         self.open_timer = eTimer()
         
         self["title"] = Label("Azman Panel")
@@ -812,8 +730,7 @@ class AzmanPanelMainScreen(Screen):
         if item["text"] == "Karcher Radio Control":
             self.start_karcherradiocontrol_install()
             return
-        keyword = item["text"].lower().replace(" ", "")
-        self._open_package_manager("Instalowanie - " + item["text"], filter_keywords=[keyword])
+        self.show_work_in_progress()
 
     def _confirm_panel_self_update(self, confirmed):
         if not confirmed:
@@ -980,14 +897,6 @@ class AzmanPanelMainScreen(Screen):
             title="Wkrótce",
         )
 
-    def _open_package_manager(self, title, filter_keywords=None):
-        if os.path.exists(constants.FEED_CONF_TARGET_PATH):
-            self.session.open(AzmanFeedScreen, title=title, filter_keywords=filter_keywords)
-        else:
-            self.params_for_screen_after_install = {'title': title, 'filter_keywords': filter_keywords}
-            message = "Repozytorium Azman Feed nie jest zainstalowane.\n\nCzy chcesz zainstalować je teraz?"
-            self.session.openWithCallback(self._proceed_with_feed_install, MessageBox, message, MessageBox.TYPE_YESNO, default=True)
-
     def open_e2k_addons_manager(self):
         self.session.open(
             MessageBox,
@@ -996,26 +905,6 @@ class AzmanPanelMainScreen(Screen):
             title="Dodatki do E2Kodi"
         )
 
-    def _proceed_with_feed_install(self, confirmed):
-        if not confirmed:
-            self.session.open(MessageBox, "Instalacja anulowana.", type=MessageBox.TYPE_INFO)
-            return
-        command = (f"curl -s --insecure -o {constants.FEED_CONF_TARGET_PATH} {constants.FEED_CONF_URL} && opkg update")
-        title = "Instalowanie Azman Feed"
-        self.session.openWithCallback(self.on_feed_install_finished, OpkgCommandScreen, title=title, command=command)
-
-    def on_feed_install_finished(self, *args):
-        if os.path.exists(constants.FEED_CONF_TARGET_PATH):
-            def open_target_screen(confirmed):
-                if self.params_for_screen_after_install:
-                    self.session.open(AzmanFeedScreen, **self.params_for_screen_after_install)
-                    self.params_for_screen_after_install = None
-            message = "Repozytorium Azman Feed zostało dodane!\n\nZostaniesz teraz przeniesiony do menedżera pakietów."
-            self.session.openWithCallback(open_target_screen, MessageBox, message, type=MessageBox.TYPE_INFO, timeout=5)
-        else:
-            message = "Wystąpił błąd podczas instalacji feeda.\n\nSprawdź połączenie z internetem i spróbuj ponownie."
-            self.session.open(MessageBox, message, type=MessageBox.TYPE_ERROR)
-            
     def open_picon_manager(self):
         saved_path = config.plugins.AzmanPanel.picon_path.value
         parent_dir = os.path.dirname(saved_path)

@@ -5,7 +5,6 @@ import threading
 import urllib.request
 import urllib.parse
 import subprocess
-import gzip
 import re
 import os
 import tempfile
@@ -124,73 +123,6 @@ class ProgressWorkerMixin:
         self.progress_timer.stop()
         if not self._is_cancelled and self.callback_progress:
             self.callback_progress(*self._progress_args)
-
-class PackageListWorker(BaseWorker):
-    
-    def __init__(self, callback_finished):
-        super(PackageListWorker, self).__init__(callback_finished)
-        self.error_message = None
-        self.packages = []
-    def _parse_packages_file(self, content):
-        packages = []
-        current_package = {}
-        for line in content.split('\n'):
-            if not line:
-                if 'Package' in current_package: packages.append(current_package)
-                current_package = {}
-                continue
-            if ': ' in line:
-                key, value = line.split(': ', 1)
-                current_package[key] = value
-        if 'Package' in current_package: packages.append(current_package)
-        return packages
-    def _get_installed_packages(self):
-        installed = {}
-        try:
-            process = subprocess.Popen(["opkg", "list-installed"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            stdout, stderr = process.communicate(timeout=60)
-            if process.returncode == 0:
-                for line in stdout.decode('utf-8', errors='ignore').split('\n'):
-                    if ' - ' in line:
-                        name, version = line.split(' - ', 1)
-                        installed[name.strip()] = version.strip()
-            else:
-                raise Exception(stderr.decode('utf-8', errors='ignore'))
-        except Exception as e:
-            utils.log_error(e, "opkg list-installed")
-            self.error_message = "Błąd sprawdzania zainstalowanych pakietów."
-        return installed
-    def run(self):
-        try:
-            packages_content = None
-            packages_gz_url = None
-            
-            
-            for tag in runtime.package_runtime_tags():
-                candidate_url = f"{constants.AZMAN_FEED_BASE_URL}/{tag}/Packages.gz"
-                try:
-                    with urllib.request.urlopen(candidate_url, timeout=10) as response:
-                        packages_content = gzip.decompress(response.read()).decode('utf-8')
-                    packages_gz_url = candidate_url
-                    break
-                except Exception:
-                    continue
-            if packages_content is None:
-                packages_gz_url = f"{constants.FEED_PACKAGES_BASE_URL}/all/Packages.gz"
-                with urllib.request.urlopen(packages_gz_url, timeout=20) as response:
-                    packages_content = gzip.decompress(response.read()).decode('utf-8')
-            available_packages = self._parse_packages_file(packages_content)
-            installed_packages = self._get_installed_packages()
-            if self.error_message: raise Exception(self.error_message)
-            for pkg in available_packages:
-                pkg_name = pkg.get('Package')
-                if not pkg_name: continue
-                self.packages.append({'name': pkg_name, 'version': pkg.get('Version', 'N/A'), 'description': pkg.get('Description', 'Brak opisu.'), 'status': 'Zainstalowany' if pkg_name in installed_packages else 'Dostępny'})
-        except Exception as e:
-            utils.log_error(e, self.__class__.__name__, url=packages_gz_url)
-            self.error_message = "Nie można pobrać listy pakietów. Sprawdź połączenie z internetem."
-        finally:
-            self._safe_call_main_thread(self.error_message, self.packages)
 
 class ManifestPackageDownloadWorker(BaseWorker):
     """Pobiera pakiet z manifestu i weryfikuje jego SHA-256 przed instalacją."""

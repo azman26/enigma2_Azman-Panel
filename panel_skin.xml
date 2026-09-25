@@ -81,18 +81,6 @@
     </screen>
 
     <!-- POZOSTAŁE EKRANY -->
-    <screen name="AzmanFeedScreen" position="center,center" size="1920,1080" title="Azman Feed - Menedżer pakietów" backgroundColor="#00000000" flags="wfNoBorder">
-        <eLabel position="0,0" size="1920,132" backgroundColor="#1A000000" zPosition="-1" />
-        <eLabel position="0,132" size="1920,843" backgroundColor="#33000000" zPosition="-1" />
-        <eLabel position="0,975" size="1920,105" backgroundColor="#1A000000" zPosition="-1" />
-        <widget source="title" render="Label" position="30,24" size="1860,66" font="Regular;51" halign="center" valign="center" foregroundColor="#FFFFFF" transparent="1" />
-        <eLabel position="30,112" size="1860,3" backgroundColor="#00bcd4" />
-        <widget name="list" position="30,150" size="1860,750" scrollbarMode="showOnDemand" backgroundColor="#00000000" transparent="1" />
-        <widget name="description" position="30,915" size="1860,42" font="Regular;36" halign="center" valign="center" foregroundColor="#cccccc" transparent="1" />
-        <widget source="key_green" render="Label" position="105,998" size="360,54" font="Regular;33" valign="center" foregroundColor="green" transparent="1" />
-        <widget source="key_red" render="Label" position="540,998" size="360,54" font="Regular;33" valign="center" foregroundColor="red" transparent="1" />
-        <widget source="key_yellow" render="Label" position="975,998" size="360,54" font="Regular;33" valign="center" foregroundColor="yellow" transparent="1" />
-    </screen>
     <screen name="OpkgCommandScreen" position="center,center" size="1000,560" title="Azman Panel" backgroundColor="#00000000" flags="wfNoBorder">
         <eLabel position="0,0" size="1000,80" backgroundColor="#1A000000" zPosition="-1" />
         <eLabel position="0,80" size="1000,410" backgroundColor="#33000000" zPosition="-1" />

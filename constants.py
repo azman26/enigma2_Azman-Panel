@@ -8,11 +8,6 @@ PLUGIN_NAME = "Azman Panel"
 PLUGIN_VERSION = "2026.09.21-1043"
 
 
-FEED_CONF_URL = "https://raw.githubusercontent.com/azman26/azman-enigma2-repo/main/azman-feed.conf"
-FEED_CONF_TARGET_PATH = "/etc/opkg/azman-feed.conf"
-FEED_PACKAGES_BASE_URL = "https://azman26.github.io/azman-enigma2-repo"
-
-AZMAN_FEED_BASE_URL = "https://www.topolowa4.pl/azman-feed"
 AZMAN_MANIFEST_URL = "https://raw.githubusercontent.com/azman26/enigma2_Azman-Panel/main/feed/manifest.json"
 AZMAN_PACKAGE_URL_API = "https://www.topolowa4.pl/api/package-url.php"
 
