@@ -1,22 +1,29 @@
 {
   "schema": 1,
   "repository": "Azman Feed",
-  "updated": "2026-10-17T18:35:52Z",
+  "updated": "2026-10-18T22:47:41Z",
   "packages": [
     {
       "id": "azman-panel",
       "name": "Azman Panel",
-      "version": "2026.09.21-1043",
+      "version": "2026.10.19-0046",
       "category": "system",
       "description": "Panel instalacyjny i narzędziowy ekosystemu Azman.",
-      "python": ["3.9", "3.12", "3.13", "3.14"],
-      "architecture": ["all"],
+      "python": [
+        "3.9",
+        "3.12",
+        "3.13",
+        "3.14"
+      ],
+      "architecture": [
+        "all"
+      ],
       "package": "enigma2-plugin-extensions--azman-azmanpanel",
       "variants": {
         "all": {
-          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.09.21-1043_all.ipk",
-          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.09.21-1043/enigma2-plugin-extensions--azman-azmanpanel_2026.09.21-1043_all.ipk",
-          "sha256": "addbcac6d462c71ab9a5750351843034b10c259179fed91b102fc737a0425933"
+          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.10.19-0046_all.ipk",
+          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.10.19-0046/enigma2-plugin-extensions--azman-azmanpanel_2026.10.19-0046_all.ipk",
+          "sha256": "7ae8ea49e2a100e40ebd9f1c8df01bca21e4b4b65e1f65dae817ea5186ea1bc7"
         }
       },
       "protected": false
@@ -27,8 +34,15 @@
       "version": "2026.08.11-1547",
       "category": "Pluginy",
       "description": "Bieżący podgląd wyładowań atmosferycznych i aktywności burzowej.",
-      "python": ["3.9", "3.12", "3.13", "3.14"],
-      "architecture": ["all"],
+      "python": [
+        "3.9",
+        "3.12",
+        "3.13",
+        "3.14"
+      ],
+      "architecture": [
+        "all"
+      ],
       "package": "enigma2-plugin-extensions--azman-monitoringburz",
       "variants": {
         "py39": {
@@ -56,8 +70,15 @@
       "version": "2026.08.11-1547",
       "category": "Pluginy",
       "description": "Szczegółowe dane pogodowe, astronomiczne oraz kartka z kalendarza.",
-      "python": ["3.9", "3.12", "3.13", "3.14"],
-      "architecture": ["all"],
+      "python": [
+        "3.9",
+        "3.12",
+        "3.13",
+        "3.14"
+      ],
+      "architecture": [
+        "all"
+      ],
       "package": "enigma2-plugin-extensions--azman-stacjameteommz",
       "variants": {
         "py39": {
@@ -85,8 +106,15 @@
       "version": "2026.08.26-1735",
       "category": "Pluginy",
       "description": "Prognoza pogody, mapy i ostrzeżenia IMGW.",
-      "python": ["3.9", "3.12", "3.13", "3.14"],
-      "architecture": ["all"],
+      "python": [
+        "3.9",
+        "3.12",
+        "3.13",
+        "3.14"
+      ],
+      "architecture": [
+        "all"
+      ],
       "package": "enigma2-plugin-extensions--azman-imgwmeteo",
       "variants": {
         "py39": {
@@ -114,8 +142,14 @@
       "version": "2.0-r6",
       "category": "Pluginy",
       "description": "Monitoring jakości powietrza w Polsce i na świecie.",
-      "python": ["3.12", "3.13", "3.14"],
-      "architecture": ["all"],
+      "python": [
+        "3.12",
+        "3.13",
+        "3.14"
+      ],
+      "architecture": [
+        "all"
+      ],
       "package": "enigma2-plugin-extensions-airly",
       "variants": {
         "all": {
@@ -131,8 +165,15 @@
       "version": "2026.08.16-1808",
       "category": "Pluginy",
       "description": "Odtwarzanie własnych playlist, kanałów i transmisji YouTube.",
-      "python": ["3.9", "3.12", "3.13", "3.14"],
-      "architecture": ["all"],
+      "python": [
+        "3.9",
+        "3.12",
+        "3.13",
+        "3.14"
+      ],
+      "architecture": [
+        "all"
+      ],
       "package": "enigma2-plugin-extensions--azman-ytplaylistplayer",
       "variants": {
         "py39": {
@@ -160,8 +201,15 @@
       "version": "2026.08.16-1808",
       "category": "Pluginy",
       "description": "Sterowanie odbiornikami Karcher opartymi na modułach Frontier Silicon.",
-      "python": ["3.9", "3.12", "3.13", "3.14"],
-      "architecture": ["all"],
+      "python": [
+        "3.9",
+        "3.12",
+        "3.13",
+        "3.14"
+      ],
+      "architecture": [
+        "all"
+      ],
       "package": "enigma2-plugin-extensions--azman-karcherradiocontrol",
       "variants": {
         "py39": {
@@ -186,7 +234,7 @@
     {
       "id": "freetvplayer",
       "name": "FreeTV Player",
-      "version": "2026.10.17-2031",
+      "version": "2026.10.19-0046",
       "category": "Pluginy",
       "description": "Odtwarzacz bezpłatnych kanałów internetowych i generator bukietów Enigma2 dla dostępnych providerów.",
       "python": [
@@ -201,20 +249,20 @@
       "package": "enigma2-plugin-extensions--azman-freetvplayer",
       "variants": {
         "py39": {
-          "ipk": "py39/enigma2-plugin-extensions--azman-freetvplayer-py39_2026.10.17-2031_all.ipk",
-          "sha256": "e1a4a1ac69a8a14a154087eea4207d21079e5112721ce86f85572048d9baaf43"
+          "ipk": "py39/enigma2-plugin-extensions--azman-freetvplayer-py39_2026.10.19-0046_all.ipk",
+          "sha256": "bd792fcbe525db392355c01135cd8f32b4578da1fdcab8fdb9b6d4ca67957ef9"
         },
         "py312": {
-          "ipk": "py312/enigma2-plugin-extensions--azman-freetvplayer-py312_2026.10.17-2031_all.ipk",
-          "sha256": "20af5f54b6ed16ea6d44a936fabc655fe43f4579ee38dd140deefeb77019a98c"
+          "ipk": "py312/enigma2-plugin-extensions--azman-freetvplayer-py312_2026.10.19-0046_all.ipk",
+          "sha256": "853e6a3b7e8d644da91e7908f60f189aafa14b6d9cb085021792a7c2d57b9be8"
         },
         "py313": {
-          "ipk": "py313/enigma2-plugin-extensions--azman-freetvplayer-py313_2026.10.17-2031_all.ipk",
-          "sha256": "b2538b58d55b4984fef9546171e545df128b63a75e1e01e734ca5e2af3662684"
+          "ipk": "py313/enigma2-plugin-extensions--azman-freetvplayer-py313_2026.10.19-0046_all.ipk",
+          "sha256": "97328366b5bb1e8491c06380914b1e35005339b39f126e38136355ddb8b32960"
         },
         "py314": {
-          "ipk": "py314/enigma2-plugin-extensions--azman-freetvplayer-py314_2026.10.17-2031_all.ipk",
-          "sha256": "1673aff8f3662b84943873bb4fad10c81959b8902f37959ff357417d01254ced"
+          "ipk": "py314/enigma2-plugin-extensions--azman-freetvplayer-py314_2026.10.19-0046_all.ipk",
+          "sha256": "840bb60f56c09764a5016c472ded050b035745ba8814e58107d702514b173e75"
         }
       },
       "protected": true
