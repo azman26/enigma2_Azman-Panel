@@ -5,7 +5,7 @@
 
 
 PLUGIN_NAME = "Azman Panel"
-PLUGIN_VERSION = "2026.09.21-1043"
+PLUGIN_VERSION = "2026.10.19-0046"
 
 
 AZMAN_MANIFEST_URL = "https://raw.githubusercontent.com/azman26/enigma2_Azman-Panel/main/feed/manifest.json"
@@ -24,8 +24,6 @@ POLSKIE_RADIO_BOUQUET_FILENAME = "userbouquet.azmanpanel_polskieradio.tv"
 RMFON_BOUQUET_FILENAME = "userbouquet.azmanpanel_rmfon.tv"
 EUROZET_BOUQUET_FILENAME = "userbouquet.azmanpanel_eurozet.tv"
 IPTVORG_BOUQUET_FILENAME = "userbouquet.azmanpanel_iptvorg_pl.tv"
-LGCHANNELSPL_BOUQUET_FILENAME = "userbouquet.azmanpanel_lgchannelspl.tv"
-LGCHANNELSPL_PLAYLIST_URL = "https://www.apsattv.com/pllg.m3u"
 SATELLITES_XML_SOURCES = (
     ("oe_alliance", "OE-Alliance", "https://raw.githubusercontent.com/oe-alliance/oe-alliance-tuxbox-common/refs/heads/master/src/satellites.xml"),
     ("openpli", "OpenPLi", "https://raw.githubusercontent.com/OpenPLi/tuxbox-xml/master/xml/satellites.xml"),

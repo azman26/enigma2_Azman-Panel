@@ -2,8 +2,15 @@ from __future__ import print_function
 
 import json
 import os
+import threading
 import time
 import uuid
+from contextlib import contextmanager
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 
 try:
     from urllib.request import Request, urlopen
@@ -11,6 +18,9 @@ try:
 except ImportError:
     from urllib2 import Request, urlopen, HTTPError
 
+
+from .epg_validation import read_json, valid_reference
+from .http_transport import private_urlopen as urlopen
 
 # Samoobslugowa rejestracja (2026-09-21): kazdy box sam dostaje wlasny token
 # przy pierwszym uzyciu, bez recznego wydawania przez wlasciciela - patrz
@@ -22,6 +32,38 @@ REGISTER_URL = "https://www.topolowa4.pl/api/register-epg-client.php"
 REGISTER_APP_KEY = "azman-epg-client-2026"
 EPG_MAP_URL = "https://www.topolowa4.pl/api/epg-map.php"
 REGISTER_RETRY_SECONDS = 3600
+_REGISTRATION_THREAD_LOCK = threading.Lock()
+
+
+@contextmanager
+def registration_lock(config_file):
+    """Blokada rejestracji miedzy watkami i miedzy pluginami: Azman FreeTV
+    Player uzywa tego samego pliku (epg_access.json + ".lock"). Bez niej oba
+    pluginy przy starcie Enigmy2 potrafily wygenerowac osobne box_id. Gdy
+    pliku blokady nie da sie otworzyc, rejestracja idzie bez niej."""
+    lock_file = config_file + ".lock"
+    with _REGISTRATION_THREAD_LOCK:
+        handle = None
+        try:
+            directory = os.path.dirname(lock_file)
+            if directory and not os.path.isdir(directory):
+                os.makedirs(directory)
+            handle = open(lock_file, "a+")
+            if fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        except Exception:
+            if handle is not None:
+                handle.close()
+            handle = None
+        try:
+            yield
+        finally:
+            if handle is not None:
+                try:
+                    if fcntl is not None:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                finally:
+                    handle.close()
 
 
 class PrivateEpgApiClient(object):
@@ -79,6 +121,14 @@ class PrivateEpgApiClient(object):
         samoobslugowo w register-epg-client.php i zapisuje wynik do
         config_file. Bez tego uzytkownik musialby recznie prosic wlasciciela
         o token - przy ~200+ instalacjach nie do utrzymania."""
+        if self.enabled():
+            return
+        with registration_lock(self.config_file):
+            # Ponowny odczyt pod blokada - drugi plugin/watek mogl wlasnie
+            # zakonczyc rejestracje.
+            self._ensure_registered_locked()
+
+    def _ensure_registered_locked(self):
         data = self._config()
         if self.enabled():
             return
@@ -100,7 +150,7 @@ class PrivateEpgApiClient(object):
             })
             response = urlopen(request, timeout=15)
             try:
-                result = json.loads(response.read().decode("utf-8"))
+                result = read_json(response)
             finally:
                 response.close()
             token = str(result.get("token") or "").strip()
@@ -154,14 +204,6 @@ class PrivateEpgApiClient(object):
         status = getattr(error, "code", None)
         if status:
             detail += " status=%s" % status
-            try:
-                body = error.read()
-                if body:
-                    text = body.decode("utf-8", "replace").strip()[:200]
-                    if text:
-                        detail += " body=%s" % text
-            except Exception:
-                pass
         return detail
 
     def _request(self, names):
@@ -181,15 +223,18 @@ class PrivateEpgApiClient(object):
             request = Request(str(config.get("url")), data=payload, headers=headers)
             response = urlopen(request, timeout=int(config.get("timeout") or 12))
             try:
-                result = json.loads(response.read().decode("utf-8"))
+                result = read_json(response)
             finally:
                 response.close()
             mappings = result.get("mappings") if isinstance(result, dict) else {}
             if not isinstance(mappings, dict):
-                mappings = {}
+                raise ValueError("Invalid EPG mappings")
             for name in names:
                 reference = str(mappings.get(name) or "").strip()
-                self.cache[name] = reference if len(reference.split(":")) == 9 else ""
+                if valid_reference(reference):
+                    self.cache[name] = reference
+                elif not reference:
+                    self.cache.setdefault(name, "")
             resolved_count = sum(1 for name in names if self.cache.get(name))
             self._log("private EPG API resolved %d of %d references" % (resolved_count, len(names)))
         except HTTPError as error:
@@ -197,8 +242,8 @@ class PrivateEpgApiClient(object):
                 self._invalidate_and_retry_registration()
             self._log("private EPG API failed: %s" % self._describe_error(error))
             for name in names:
-                self.cache[name] = ""
+                self.cache.setdefault(name, "")
         except Exception as error:
             self._log("private EPG API failed: %s" % self._describe_error(error))
             for name in names:
-                self.cache[name] = ""
+                self.cache.setdefault(name, "")

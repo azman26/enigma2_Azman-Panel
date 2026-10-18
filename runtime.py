@@ -2,6 +2,19 @@
 
 import platform
 import sys
+import shlex
+
+
+def panel_tool_argv(tool, *args, **kwargs):
+    if tool not in ("package_install", "backups", "diagnostics"):
+        raise ValueError("Unknown Panel tool")
+    code = ("import sys; sys.path.insert(0, '/usr/lib/enigma2/python'); "
+            "from Plugins.Extensions.AzmanPanel.%s import main; sys.exit(main())" % tool)
+    return [kwargs.get("python", "python3"), "-c", code] + list(args)
+
+
+def panel_tool_command(tool, *args):
+    return " ".join(shlex.quote(value) for value in panel_tool_argv(tool, *args))
 
 
 def _read_first_line(path):

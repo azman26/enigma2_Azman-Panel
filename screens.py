@@ -18,8 +18,9 @@ from Tools.LoadPixmap import LoadPixmap
 from enigma import eTimer, eConsoleAppContainer, gRGB
 
 from . import constants, runtime, utils
+from .backups import BackupStore
 from .azman_ui import load_responsive_skin
-from .workers import PiconZipListWorker, PiconInstallationWorker, PrivateBouquetListWorker, PrivateBouquetInstallWorker, BouquetWrapperDetectionWorker, IptvBouquetUninstallWorker, IptvOrgWorker, LgChannelsPlBouquetWorker, MyRadioOnlineBouquetWorker, PolskieRadioBouquetWorker, RmfonBouquetWorker, EurozetBouquetWorker, ManifestPackageDownloadWorker, ManifestUpdateCheckWorker, SatellitesXmlUpdateWorker
+from .workers import PiconZipListWorker, PiconInstallationWorker, PrivateBouquetListWorker, PrivateBouquetInstallWorker, BouquetWrapperDetectionWorker, IptvBouquetUninstallWorker, IptvOrgWorker, MyRadioOnlineBouquetWorker, PolskieRadioBouquetWorker, RmfonBouquetWorker, EurozetBouquetWorker, ManifestPackageDownloadWorker, ManifestUpdateCheckWorker, SatellitesXmlUpdateWorker
 from .config import config, save_config
 
 PLUGIN_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -107,7 +108,6 @@ class PackageTileSelectionScreen(Screen):
                 ("radio sat", "icon_picon_radio.png"),
                 ("rakuten", "icon_picon_rakuten.png"),
                 ("sweet", "icon_picon_sweettv.png"),
-                ("lg channels", "icon_picon_lgchannels.png"),
                 ("xiaomi", "icon_picon_xiaomi.png"),
                 ("fast", "icon_picon_azman_fast.png"),
                 ("sat", "icon_picon_sat.png"),
@@ -178,6 +178,19 @@ class PackageTileSelectionScreen(Screen):
         elif not self.on_uninstall_callback:
             self.close()
 
+class IptvAuditReportScreen(Screen):
+    skin = """<screen name="IptvAuditReportScreen" position="center,center" size="1000,600" title="Audyt IPTV — OK/EXIT: zamknij, góra/dół: przewijaj">
+        <widget name="report" position="20,20" size="960,560" font="Regular;22" />
+    </screen>"""
+
+    def __init__(self, session, report):
+        Screen.__init__(self, session)
+        self["report"] = ScrollLabel(report)
+        self["actions"] = ActionMap(["OkCancelActions", "DirectionActions"], {
+            "ok": self.close, "cancel": self.close,
+            "up": self["report"].pageUp, "down": self["report"].pageDown}, -1)
+
+
 class OpkgCommandScreen(Screen):
     skin = """
         <screen name="OpkgCommandScreen" position="center,center" size="1000,560" title="Azman Panel" backgroundColor="#00000000" flags="wfNoBorder">
@@ -246,7 +259,7 @@ class OpkgCommandScreen(Screen):
             callback = self.callback
             self.callback = None
             callback()
-        if self.restart_gui:
+        if self.restart_gui and not result:
             self._ask_for_restart()
         else:
             self.appendText("\nNaciśnij OK/EXIT, aby zamknąć.")
@@ -435,7 +448,6 @@ class AzmanPanelMainScreen(Screen):
             ("Bukiety IPTV PL", self.open_iptv_bouquet_manager, "icon_iptv_pl.png", "Polskie kana\u0142y IPTV uporz\u0105dkowane w gotowych bukietach Enigma2."),
             ("Bukiety FAST", lambda: self.show_coming_soon("Bukiety FAST"), "icon_fast.png", "Gotowe bukiety kana\u0142\u00f3w FAST - funkcja zostanie udost\u0119pniona wkr\u00f3tce."),
             ("MyRadioOnline", self.start_myradioonline_bouquet, "icon_myradioonline.png", "Tworzy bukiet polskich i zagranicznych stacji radiowych MyRadioOnline."),
-            ("LG Channels PL", self.start_lgchannelspl_bouquet, "icon_lgchannels.png", "Tworzy aktualny bukiet bezp\u0142atnych kana\u0142\u00f3w LG Channels Polska."),
             ("Polskie Radio", self.start_polskieradio_bouquet, "icon_polskieradio.png", "Tworzy bukiet stacji Polskiego Radia wraz z kana\u0142ami tematycznymi i regionalnymi."),
             ("RMF ON", self.start_rmfon_bouquet, "icon_rmfon.png", "Tworzy bukiet stacji radiowych dost\u0119pnych w serwisie RMF ON."),
             ("Eurozet", self.start_eurozet_bouquet, "icon_eurozet.png", "Tworzy bukiet stacji grupy Eurozet, m.in. Radio ZET, Antyradio i Meloradio."),
@@ -455,6 +467,9 @@ class AzmanPanelMainScreen(Screen):
             ("AjPanel", self.start_ajpanel_install, "icon_ajpanel.png", "Zewn\u0119trzne narz\u0119dzie administracyjne i konfiguracyjne dla Enigma2."),
             ("M3UIPTV", self.start_m3uiptv_install, "icon_m3uiptv.png", "Konwertuje listy M3U do bukiet\u00f3w kana\u0142\u00f3w Enigma2."),
             ("Airly", self.start_airly_install, "icon_airly.png", "Monitoring jako\u015bci powietrza w Polsce i na \u015bwiecie."),
+            ("Kopie ustawień", self.show_backups, "icon_placeholder.png", "Lokalne kopie ustawień Panelu i FTVP oraz bukietów Azmana. Zawierają dane logowania — nie udostępniaj ich innym."),
+            ("EPG dla IPTV", self.configure_external_epg, "icon_placeholder.png", "Sprawdź referencje obcych list IPTV i opcjonalnie przypisz je według mapowania Azman/Kamoz."),
+            ("Diagnostyka", self.show_diagnostics, "icon_placeholder.png", "Wersje pakietów, Python, porty proxy oraz lokalny raport z maskowaniem typowych danych poufnych."),
             ("Aktualizacja satellites.xml", self.start_satellites_xml_update, "icon_satellitesxml.png", "Pobiera aktualny satellites.xml z OE-Alliance lub OpenPLi i tworzy kopię pliku przed zapisem."),
         ]
         
@@ -512,10 +527,10 @@ class AzmanPanelMainScreen(Screen):
         text = item["text"]
         if "EPG" in text or text == "Picons":
             return "EPG/Picony"
-        channel_names = ("Bukiety IPTV PL", "Bukiety FAST", "IPTV.ORG", "LG Channels PL", "MyRadioOnline", "Polskie Radio", "RMF ON", "Eurozet")
+        channel_names = ("Bukiety IPTV PL", "Bukiety FAST", "IPTV.ORG", "MyRadioOnline", "Polskie Radio", "RMF ON", "Eurozet")
         if text in channel_names:
             return "Bukiety/Listy kanałów"
-        tool_names = ("Archiv CZSK", "AjPanel", "Dodatki do E2K", "M3UIPTV", "Airly", "Aktualizacja satellites.xml")
+        tool_names = ("Kopie ustawień", "Diagnostyka", "Archiv CZSK", "AjPanel", "Dodatki do E2K", "M3UIPTV", "Airly", "Aktualizacja satellites.xml")
         if text in tool_names:
             return "Narzędzia/Inne wtyczki"
         plugin_names = ("FreeTV Player", "Stacja Meteo MMz", "IMGW Meteo", "Shelly Control", "Karcher Radio Control", "MiHome Control", "YT Playlist Player", "Monitor Burz")
@@ -536,11 +551,11 @@ class AzmanPanelMainScreen(Screen):
             order_map = {name: index for index, name in enumerate(plugin_order)}
             self.menu_items.sort(key=lambda item: order_map.get(item["text"], len(order_map)))
         elif selected_tab == "EPG/Picony":
-            order = ("Picons", "Polskie \u017ar\u00f3d\u0142a EPG")
+            order = ("Picons", "Polskie \u017ar\u00f3d\u0142a EPG", "EPG dla IPTV")
             order_map = {name: index for index, name in enumerate(order)}
             self.menu_items.sort(key=lambda item: order_map.get(item["text"], len(order_map)))
         elif selected_tab == "Bukiety/Listy kanałów":
-            order = ("Bukiety IPTV PL", "Bukiety FAST", "LG Channels PL", "IPTV.ORG", "MyRadioOnline", "RMF ON", "Polskie Radio", "Eurozet")
+            order = ("Bukiety IPTV PL", "Bukiety FAST", "IPTV.ORG", "MyRadioOnline", "RMF ON", "Polskie Radio", "Eurozet")
             order_map = {name: index for index, name in enumerate(order)}
             self.menu_items.sort(key=lambda item: order_map.get(item["text"], len(order_map)))
         elif selected_tab == "Narzędzia/Inne wtyczki":
@@ -1066,18 +1081,7 @@ class AzmanPanelMainScreen(Screen):
             default=True,
         )
 
-    def start_lgchannelspl_bouquet(self):
-        self.session.openWithCallback(
-            self._confirm_lgchannelspl_bouquet,
-            MessageBox,
-            "Pobrać aktualną listę LG Channels PL i utworzyć bukiet kanałów?",
-            MessageBox.TYPE_YESNO,
-            default=True,
-        )
 
-    def _confirm_lgchannelspl_bouquet(self, confirmed):
-        if confirmed:
-            self._defer_action(lambda: self._start_radio_bouquet("LG Channels PL", LgChannelsPlBouquetWorker))
 
     def _confirm_myradioonline_bouquet(self, confirmed):
         if not confirmed:
@@ -1543,18 +1547,8 @@ class AzmanPanelMainScreen(Screen):
 
     @staticmethod
     def _build_install_command(package_path, remove_package_names):
-        # opkg nie usuwa automatycznie poprzedniej wersji, jeśli różni się
-        # nazwą pakietu (np. zmiana wariantu pyXXX między aktualizacjami) -
-        # dlatego zawsze próbujemy usunąć wszystkie znane nazwy pakietu
-        # przed instalacją nowej wersji. "opkg remove" kończy się błędem,
-        # gdy dany pakiet nie jest zainstalowany, więc łączymy polecenia
-        # średnikiem (nie &&), żeby brak jednej z wersji nie przerwał reszty.
-        parts = [
-            "opkg remove %s >/dev/null 2>&1" % shlex.quote(name)
-            for name in (remove_package_names or [])
-        ]
-        parts.append("opkg --force-reinstall install %s" % shlex.quote(package_path))
-        return " ; ".join(parts)
+        # Known variant names are retained for compatibility, never pre-removed.
+        return runtime.panel_tool_command("package_install", package_path)
 
     def _on_manifest_package_ready(self, error_message, package_path, remove_package_names=None):
         self.current_worker = None
@@ -1591,6 +1585,114 @@ class AzmanPanelMainScreen(Screen):
             install_command,
             callback=lambda: self._remove_temporary_package(package_path)
         )
+
+    def configure_external_epg(self):
+        enabled = config.plugins.AzmanPanel.external_iptv_epg.value
+        self.session.openWithCallback(self._external_epg_choice, ChoiceBox,
+            title="Audyt i EPG dla IPTV: " + ("włączone" if enabled else "wyłączone"),
+            list=[("Sprawdź bukiety teraz", "refresh"), ("Pokaż ostatni raport", "report"),
+                  ("Przypisz referencje według mapowania Azman", "repair"),
+                  ("Włącz okresowy audyt i EPG zgodnych kanałów", "enable"), ("Wyłącz", "disable")])
+
+    def _external_epg_choice(self, choice):
+        if not choice:
+            return
+        action = choice[1]
+        if action == "enable":
+            self.session.openWithCallback(self._enable_external_epg, MessageBox,
+                "Włączyć okresowy audyt i pobieranie EPG dla zgodnych kanałów IPTV?\n"
+                "Audyt nie zmienia referencji. Zmiany wymagają osobnego wybrania opcji przypisania.",
+                MessageBox.TYPE_YESNO, default=False)
+        elif action == "disable":
+            config.plugins.AzmanPanel.external_iptv_epg.value = False
+            config.plugins.AzmanPanel.external_iptv_epg.save()
+            save_config()
+        elif action == "refresh":
+            self._start_external_epg()
+        elif action == "report":
+            from .external_epg import REPORT_FILE
+            try:
+                with open(REPORT_FILE, encoding="utf-8") as handle:
+                    report = handle.read()
+            except OSError:
+                report = "Brak raportu. Wybierz najpierw: Sprawdź bukiety teraz."
+            self.session.open(IptvAuditReportScreen, report)
+        elif action == "repair":
+            self.session.openWithCallback(self._repair_external_epg, MessageBox,
+                "Przypisać referencje według mapowania Azman/Kamoz we wszystkich obcych bukietach IPTV?\n"
+                "Powstanie kopia bezpieczeństwa. Zmienią się tylko jednoznacznie dopasowane referencje; "
+                "nazwy i adresy strumieni pozostaną zachowane. Kanały bez mapowania zostaną pominięte.",
+                MessageBox.TYPE_YESNO, default=False)
+
+    def _enable_external_epg(self, confirmed):
+        if confirmed:
+            config.plugins.AzmanPanel.external_iptv_epg.value = True
+            config.plugins.AzmanPanel.external_iptv_epg.save()
+            save_config()
+            self._start_external_epg()
+
+    def _repair_external_epg(self, confirmed):
+        if confirmed:
+            self._start_external_epg(repair=True)
+
+    def _start_external_epg(self, repair=False):
+        from .external_epg import audit_external_async
+        audit_external_async(logger=lambda message: utils.log_event(message), repair=repair)
+        self.session.open(MessageBox, "Analiza została uruchomiona w tle. Wynik znajdziesz w opcji: Pokaż ostatni raport.", type=MessageBox.TYPE_INFO)
+
+    def show_diagnostics(self):
+        self.session.open(OpkgCommandScreen,
+            command=runtime.panel_tool_command("diagnostics"),
+            title="Diagnostyka Azman", restart_gui=False)
+
+    def show_backups(self):
+        try:
+            names = BackupStore().list()
+        except Exception:
+            self.session.open(MessageBox, "Nie udało się odczytać lokalnych kopii.", type=MessageBox.TYPE_ERROR)
+            return
+        choices = [("Utwórz kopię teraz", "create")]
+        choices.extend(("Przywróć: " + name, name) for name in names)
+        self.session.openWithCallback(self._backup_selected, ChoiceBox,
+            title="Kopie lokalne — zachowujemy 3 ostatnie. Zawierają dane logowania.", list=choices)
+
+    def _backup_selected(self, choice):
+        if not choice:
+            return
+        action = choice[1]
+        if action == "create":
+            self._run_backup("create")
+        else:
+            self.session.openWithCallback(
+                lambda confirmed: self._run_backup("restore", action) if confirmed else None,
+                MessageBox, "Przywrócić ustawienia Panelu i FTVP oraz bukiety z tej kopii?\n"
+                "Przed przywróceniem powstanie kopia bieżącego stanu.\n"
+                "Nowsze pliki nieobecne w kopii pozostaną. Automatyczne EPG dla zewnętrznych list zostanie wyłączone. Po sukcesie zalecany restart GUI.",
+                MessageBox.TYPE_YESNO, default=False)
+
+    def _run_backup(self, action, name=None):
+        from Components.config import configfile
+        configfile.save()
+        command = runtime.panel_tool_command("backups", action, *([name] if name is not None else []))
+        self.session.openWithCallback(self._backup_closed, OpkgCommandScreen,
+            command=command, title="Kopia ustawień" if action == "create" else "Przywracanie ustawień",
+            callback=self._reload_backup_config if action == "restore" else None,
+            restart_gui=action == "restore")
+
+    def _reload_backup_config(self):
+        from Components.config import configfile
+        configfile.load()
+        config.plugins.AzmanPanel.load()
+        config.plugins.AzmanPanel.external_iptv_epg.value = False
+        config.plugins.AzmanPanel.external_iptv_epg.save()
+        if hasattr(config.plugins, "azmanfreetvplayer"):
+            config.plugins.azmanfreetvplayer.load()
+        configfile.save()
+        from enigma import eDVBDB
+        eDVBDB.getInstance().reloadBouquets()
+
+    def _backup_closed(self, *args):
+        pass
 
     def _remove_temporary_package(self, package_path):
         try:

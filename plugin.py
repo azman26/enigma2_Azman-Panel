@@ -6,6 +6,7 @@ from .screens import AzmanPanelMainScreen
 from . import constants, utils
 from .config import config
 from .epg_events import import_events_async as import_epg_events_async
+from .external_epg import audit_external_async
 
 
 def main(session, **kwargs):
@@ -20,6 +21,14 @@ def menu(menuid, **kwargs):
 
 _EPG_EVENTS_TIMER = None
 EPG_EVENTS_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000
+_EXTERNAL_EPG_TIMER = None
+
+
+def _run_external_epg():
+    if config.plugins.AzmanPanel.external_iptv_epg.value:
+        audit_external_async(logger=lambda message: utils.log_event(message))
+    if _EXTERNAL_EPG_TIMER is not None:
+        _EXTERNAL_EPG_TIMER.start(12 * 60 * 60 * 1000, True)
 
 
 def _run_epg_events_import():
@@ -33,17 +42,23 @@ def _on_epg_events_timer():
 
 
 def start_epg_events_timer():
-    global _EPG_EVENTS_TIMER
+    global _EPG_EVENTS_TIMER, _EXTERNAL_EPG_TIMER
     if _EPG_EVENTS_TIMER is not None:
         return
     _EPG_EVENTS_TIMER = eTimer()
     _EPG_EVENTS_TIMER.callback.append(_on_epg_events_timer)
     _EPG_EVENTS_TIMER.start(EPG_EVENTS_REFRESH_INTERVAL_MS, True)
     utils.log_event("EPG events timer armed (every 12h)")
+    _EXTERNAL_EPG_TIMER = eTimer()
+    _EXTERNAL_EPG_TIMER.callback.append(_run_external_epg)
+    _run_external_epg()
 
 
 def stop_epg_events_timer():
-    global _EPG_EVENTS_TIMER
+    global _EPG_EVENTS_TIMER, _EXTERNAL_EPG_TIMER
+    if _EXTERNAL_EPG_TIMER is not None:
+        _EXTERNAL_EPG_TIMER.stop()
+        _EXTERNAL_EPG_TIMER = None
     if _EPG_EVENTS_TIMER is not None:
         try:
             _EPG_EVENTS_TIMER.stop()

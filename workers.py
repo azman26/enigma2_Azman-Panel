@@ -14,18 +14,15 @@ import hashlib
 import shutil
 from xml.etree import ElementTree
 from datetime import datetime
-from enigma import eTimer, eDVBDB
+from enigma import eDVBDB
 from . import constants, utils, runtime
+from .mainthread import call_in_main_thread
 from .epg_mapper import PanelEpgMapper
 from .epg_events import import_events_async as import_epg_events_async
 
 
 def derive_package_names(entry):
-    """Zwraca wszystkie znane nazwy pakietów opkg dla wpisu manifestu -
-    zarówno ogólną nazwę, jak i nazwy poszczególnych wariantów pyXXX.
-    Używane zarówno do sprawdzania zainstalowanej wersji, jak i do
-    usunięcia poprzedniej wersji przed instalacją nowej (opkg nie robi
-    tego automatycznie, gdy nazwa pakietu zmienia się między wariantami)."""
+    """Known package names used to detect installed versions and variants."""
     names = set()
     package = str(entry.get("package") or "").strip()
     if package:
@@ -37,27 +34,40 @@ def derive_package_names(entry):
     return names
 
 
+def _log_main_thread_error(message):
+    utils.log_event(message)
+
+
+def _reload_service_lists_now():
+    database = eDVBDB.getInstance()
+    database.reloadBouquets()
+    database.reloadServicelist()
+
+
+def reload_service_lists():
+    """Przeładowanie listy kanałów w głównym wątku Enigmy2 - wywołane wprost
+    z wątku roboczego (jak wcześniej) mogło wywrócić GUI."""
+    call_in_main_thread(_reload_service_lists_now, logger=_log_main_thread_error)
+
+
 class BaseWorker(threading.Thread):
     
     def __init__(self, callback_finished):
         threading.Thread.__init__(self)
         self._is_cancelled = False
         self.callback_finished = callback_finished
-        self.timer = eTimer()
-        self.timer.callback.append(self._safe_callback)
-        self._callback_args = ()
 
     def cancel(self):
         self._is_cancelled = True
 
     def _safe_call_main_thread(self, *args):
-        self._callback_args = args
-        self.timer.start(0, True)
+        # Wcześniej eTimer.start() z wątku roboczego - timery Enigmy2 też nie
+        # są bezpieczne względem wątków; reactor.callFromThread jest.
+        call_in_main_thread(self._deliver_result, args, logger=_log_main_thread_error)
 
-    def _safe_callback(self):
-        self.timer.stop()
+    def _deliver_result(self, args):
         if not self._is_cancelled and self.callback_finished:
-            self.callback_finished(*self._callback_args)
+            self.callback_finished(*args)
 
     def _internal_reporthook(self, count, block_size, total_size):
         if self._is_cancelled:
@@ -111,18 +121,14 @@ class SatellitesXmlUpdateWorker(BaseWorker):
 class ProgressWorkerMixin:
     """Wspólna obsługa bezpiecznego raportowania postępu do GUI."""
     def _init_progress(self):
-        self.progress_timer = eTimer()
-        self.progress_timer.callback.append(self._safe_progress_callback)
-        self._progress_args = ()
+        pass
 
     def _safe_call_progress(self, *args):
-        self._progress_args = args
-        self.progress_timer.start(0, True)
+        call_in_main_thread(self._deliver_progress, args, logger=_log_main_thread_error)
 
-    def _safe_progress_callback(self):
-        self.progress_timer.stop()
+    def _deliver_progress(self, args):
         if not self._is_cancelled and self.callback_progress:
-            self.callback_progress(*self._progress_args)
+            self.callback_progress(*args)
 
 class ManifestPackageDownloadWorker(BaseWorker):
     """Pobiera pakiet z manifestu i weryfikuje jego SHA-256 przed instalacją."""
@@ -443,9 +449,7 @@ class PrivateBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
             utils.register_bouquets(target_dir, filenames)
 
             self._safe_call_progress(len(filenames), len(filenames), "Przeładowywanie listy kanałów...")
-            database = eDVBDB.getInstance()
-            database.reloadBouquets()
-            database.reloadServicelist()
+            reload_service_lists()
             final_message = "Zainstalowano %d bukiet(ów). Lista kanałów została przeładowana." % len(filenames)
         except InterruptedError:
             error_message = "Instalacja anulowana przez użytkownika."
@@ -495,9 +499,7 @@ class IptvBouquetUninstallWorker(ProgressWorkerMixin, BaseWorker):
 
             self._safe_call_progress(total_bouquets, total_bouquets, "Przeładowywanie listy kanałów...")
 
-            db = eDVBDB.getInstance()
-            db.reloadBouquets()
-            db.reloadServicelist()
+            reload_service_lists()
             final_message = f"Odinstalowano pomyślnie {len(self.selected_bouquets)} bukiet(ów).\nLista kanałów została przeładowana."
 
         except InterruptedError:
@@ -536,9 +538,7 @@ class _RadioApiBouquetWorker(BaseWorker):
         if not any(filename in line for line in existing):
             existing.append(marker)
             utils.atomic_write_lines(bouquets, existing)
-        db = eDVBDB.getInstance()
-        db.reloadBouquets()
-        db.reloadServicelist()
+        reload_service_lists()
         import_epg_events_async(logger=lambda message: utils.log_event("EPG events: %s" % message))
 
 
@@ -671,83 +671,6 @@ class EurozetBouquetWorker(_RadioApiBouquetWorker):
             if not self._is_cancelled: self._safe_call_main_thread(getattr(self, "error_message", None), getattr(self, "final_message", None))
 
 
-class LgChannelsPlBouquetWorker(_RadioApiBouquetWorker):
-    def __init__(self, callback_finished):
-        super(LgChannelsPlBouquetWorker, self).__init__(callback_finished)
-        self.error_message = None
-        self.final_message = None
-
-    def _prepare_url(self, url):
-        values = {
-            "APP_BUNDLE": "pl.azman.panel",
-            "APP_NAME": "Azman Panel",
-            "APP_VERSION": "1.0",
-            "COUNTRY": "PL",
-            "DEVICE_ID": "00000000-0000-0000-0000-000000000000",
-            "DEVICE_MAKE": "Enigma2",
-            "DEVICE_MODEL": "Linux STB",
-            "DEVICE_TYPE": "connected_tv",
-            "GDPR": "1",
-            "TARGETAD_ALLOWED": "0",
-            "UA": "Mozilla/5.0 (X11; Linux armv7l) AzmanPanel/1.0",
-            "VIEWSIZE": "1920x1080",
-        }
-        prepared = str(url).strip()
-        for name, value in values.items():
-            prepared = prepared.replace("[%s]" % name, urllib.parse.quote(value, safe=""))
-        return re.sub(r"\[[A-Z0-9_]+\]", "", prepared)
-
-    def run(self):
-        bouquet_filepath = os.path.join("/etc/enigma2", constants.LGCHANNELSPL_BOUQUET_FILENAME)
-        try:
-            request = urllib.request.Request(constants.LGCHANNELSPL_PLAYLIST_URL, headers={
-                "User-Agent": "Mozilla/5.0 (X11; Linux armv7l) AzmanPanel/1.0",
-                "Accept": "audio/mpegurl, application/vnd.apple.mpegurl, text/plain, */*",
-                "Referer": "https://www.apsattv.com/streams.html",
-            })
-            with urllib.request.urlopen(request, timeout=30) as response:
-                content = response.read().decode("utf-8-sig", errors="replace")
-            if not content.lstrip().startswith("#EXTM3U"):
-                raise ValueError("Pobrana lista LG Channels PL ma nieprawidłowy format.")
-            metadata = None
-            seen_urls = set()
-            channels = []
-            for raw_line in content.splitlines():
-                line = raw_line.strip()
-                if not line:
-                    continue
-                if line.startswith("#EXTINF"):
-                    metadata = line
-                    continue
-                if line.startswith("#"):
-                    continue
-                if metadata is None or not line.startswith(("http://", "https://")):
-                    metadata = None
-                    continue
-                stream_url = self._prepare_url(line)
-                if ".m3u8" not in stream_url.lower() or stream_url in seen_urls:
-                    metadata = None
-                    continue
-                seen_urls.add(stream_url)
-                name = metadata.rsplit(",", 1)[-1].strip() or "LG Channels"
-                name = re.sub(r"^\d+\s+", "", name).replace(":", " ").replace("\n", " ")
-                channels.append((name, stream_url))
-                metadata = None
-            if self._is_cancelled:
-                raise InterruptedError()
-            if not channels:
-                raise ValueError("Nie znaleziono kanałów HLS na liście LG Channels PL.")
-            self._write_bouquet(constants.LGCHANNELSPL_BOUQUET_FILENAME, "LG Channels PL", channels,
-                                 service_type="1", legacy_filename="userbouquet.azmanplayer_lgchannelspl.tv")
-            self.final_message = "Utworzono bukiet LG Channels PL.\n\nDodano %d kanałów." % len(channels)
-        except InterruptedError:
-            self.error_message = "Operacja anulowana przez użytkownika."
-        except Exception as error:
-            utils.log_error(error, self.__class__.__name__, url=constants.LGCHANNELSPL_PLAYLIST_URL, target=bouquet_filepath)
-            self.error_message = "Nie udało się utworzyć bukietu LG Channels PL:\n%s" % error
-        finally:
-            if not self._is_cancelled:
-                self._safe_call_main_thread(self.error_message, self.final_message)
 
 
 class IptvOrgWorker(_RadioApiBouquetWorker):
