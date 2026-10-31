@@ -37,10 +37,6 @@ Panel jest dostępny w menu wtyczek. Widoczność w głównym menu Enigma2 możn
 
 Panel korzysta z tego samego mechanizmu EPG co FTVP: automatycznej rejestracji dostępu do API, mapowania kanałów i pobierania wydarzeń dla własnych bukietów. Import odbywa się po zapisaniu bukietu, przy starcie GUI i co 12 godzin. Dostępność programu zależy od danych źródłowych dla danego kanału.
 
-Osobna funkcja „EPG dla IPTV”, obejmująca obce listy, została wycofana. Z Narzędzi usunięto również kafelki „Kopie ustawień” i „Diagnostyka”.
-
-Szczegóły: [wspólny mechanizm EPG](docs/epg-common.md) i [opis wycofanej funkcji](docs/wycofane-epg-iptv.md).
-
 ## Środowisko
 
 Pakiet ma architekturę `all` i jest przeznaczony dla środowisk Enigma2 z Pythonem 3.12–3.14. Przed instalacją sprawdź wersję Pythona w swoim obrazie.
