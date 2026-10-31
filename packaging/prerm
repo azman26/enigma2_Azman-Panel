@@ -1,0 +1,12 @@
+#!/bin/sh
+
+set -eu
+
+PLUGIN_DIR=/usr/lib/enigma2/python/Plugins/Extensions/AzmanPanel
+
+if [ -d "$PLUGIN_DIR" ]; then
+    find "$PLUGIN_DIR" -type d -name '__pycache__' -prune -exec rm -rf {} +
+    find "$PLUGIN_DIR" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+fi
+
+exit 0

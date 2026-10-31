@@ -1,0 +1,731 @@
+
+
+
+import threading
+import urllib.request
+import urllib.parse
+import subprocess
+import re
+import os
+import tempfile
+import zipfile
+import json
+import hashlib
+import shutil
+from xml.etree import ElementTree
+from datetime import datetime
+from enigma import eDVBDB
+from . import constants, utils, runtime
+from .mainthread import call_in_main_thread
+from .epg_mapper import PanelEpgMapper
+from .epg_events import import_events_async as import_epg_events_async
+
+
+def derive_package_names(entry):
+    """Known package names used to detect installed versions and variants."""
+    names = set()
+    package = str(entry.get("package") or "").strip()
+    if package:
+        names.add(package)
+    for variant in (entry.get("variants") or {}).values():
+        filename = os.path.basename(str(variant.get("ipk") or ""))
+        if filename.count("_") >= 2:
+            names.add(filename.rsplit("_", 2)[0])
+    return names
+
+
+def _log_main_thread_error(message):
+    utils.log_event(message)
+
+
+def _reload_service_lists_now():
+    database = eDVBDB.getInstance()
+    database.reloadBouquets()
+    database.reloadServicelist()
+
+
+def reload_service_lists():
+    """Przeładowanie listy kanałów w głównym wątku Enigmy2 - wywołane wprost
+    z wątku roboczego (jak wcześniej) mogło wywrócić GUI."""
+    call_in_main_thread(_reload_service_lists_now, logger=_log_main_thread_error)
+
+
+class BaseWorker(threading.Thread):
+    
+    def __init__(self, callback_finished):
+        threading.Thread.__init__(self)
+        self._is_cancelled = False
+        self.callback_finished = callback_finished
+
+    def cancel(self):
+        self._is_cancelled = True
+
+    def _safe_call_main_thread(self, *args):
+        # Wcześniej eTimer.start() z wątku roboczego - timery Enigmy2 też nie
+        # są bezpieczne względem wątków; reactor.callFromThread jest.
+        call_in_main_thread(self._deliver_result, args, logger=_log_main_thread_error)
+
+    def _deliver_result(self, args):
+        if not self._is_cancelled and self.callback_finished:
+            self.callback_finished(*args)
+
+    def _internal_reporthook(self, count, block_size, total_size):
+        if self._is_cancelled:
+            raise InterruptedError("Download cancelled by user")
+
+class SatellitesXmlUpdateWorker(BaseWorker):
+    MAX_SIZE = 10 * 1024 * 1024
+
+    def __init__(self, source_name, source_url, target_paths, callback_finished):
+        super(SatellitesXmlUpdateWorker, self).__init__(callback_finished)
+        self.source_name = source_name
+        self.source_url = source_url
+        self.target_paths = target_paths
+
+    def run(self):
+        try:
+            request = urllib.request.Request(self.source_url, headers={"User-Agent": "AzmanPanel/1.0"})
+            with urllib.request.urlopen(request, timeout=30) as response:
+                data = response.read(self.MAX_SIZE + 1)
+            if len(data) > self.MAX_SIZE:
+                raise ValueError("Pobrany plik satellites.xml jest zbyt duży.")
+            root = ElementTree.fromstring(data)
+            if root.tag != "satellites":
+                raise ValueError("Pobrany plik nie jest poprawnym satellites.xml.")
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            saved = []
+            for path in self.target_paths:
+                directory = os.path.dirname(path)
+                if not os.path.isdir(directory):
+                    os.makedirs(directory)
+                if os.path.exists(path):
+                    shutil.copy2(path, "%s.bak-%s" % (path, timestamp))
+                fd, temporary_path = tempfile.mkstemp(prefix=".azmanpanel-sat-", dir=directory)
+                try:
+                    with os.fdopen(fd, "wb") as handle:
+                        handle.write(data)
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                    os.replace(temporary_path, path)
+                except Exception:
+                    if os.path.exists(temporary_path):
+                        os.unlink(temporary_path)
+                    raise
+                saved.append(path)
+            message = "Zaktualizowano satellites.xml ze źródła %s.\n\nZapisano: %s\nPrzed zapisem utworzono kopię istniejącego pliku." % (self.source_name, ", ".join(saved))
+            self._safe_call_main_thread(None, message)
+        except Exception as error:
+            utils.log_error(error, self.__class__.__name__, source=self.source_url)
+            self._safe_call_main_thread("Nie udało się zaktualizować satellites.xml: %s" % error, None)
+
+class ProgressWorkerMixin:
+    """Wspólna obsługa bezpiecznego raportowania postępu do GUI."""
+    def _init_progress(self):
+        pass
+
+    def _safe_call_progress(self, *args):
+        call_in_main_thread(self._deliver_progress, args, logger=_log_main_thread_error)
+
+    def _deliver_progress(self, args):
+        if not self._is_cancelled and self.callback_progress:
+            self.callback_progress(*args)
+
+class ManifestPackageDownloadWorker(BaseWorker):
+    """Pobiera pakiet z manifestu i weryfikuje jego SHA-256 przed instalacją."""
+    MAX_PACKAGE_SIZE = 100 * 1024 * 1024
+    TEMP_DIR = "/tmp/.azmanpanel"
+
+    def __init__(self, package_id, callback_finished):
+        super(ManifestPackageDownloadWorker, self).__init__(callback_finished)
+        self.package_id = package_id
+        self.error_message = None
+        self.package_path = None
+        self.remove_package_names = []
+
+    def run(self):
+        target = None
+        try:
+            utils.log_event("Rozpoczęto pobieranie pakietu", package_id=self.package_id)
+            with urllib.request.urlopen(constants.AZMAN_MANIFEST_URL, timeout=20) as response:
+                manifest = json.loads(response.read().decode("utf-8"))
+            entry = next((item for item in manifest.get("packages", [])
+                          if item.get("id") == self.package_id), None)
+            if not entry:
+                raise ValueError("Pakiet nie występuje w manifeście.")
+            self.remove_package_names = sorted(derive_package_names(entry))
+            variant, variant_tag, compatibility_error = runtime.select_manifest_variant(entry)
+            if compatibility_error:
+                raise ValueError(compatibility_error)
+            if not variant or not variant.get("sha256"):
+                raise ValueError("Brak zgodnego wariantu lub sumy SHA-256.")
+            package_url = variant.get("url")
+            if entry.get("protected"):
+                query = urllib.parse.urlencode({
+                    "package_id": self.package_id,
+                    "variant": variant_tag
+                })
+                api_url = "%s?%s" % (constants.AZMAN_PACKAGE_URL_API, query)
+                with urllib.request.urlopen(api_url, timeout=20) as response:
+                    access = json.loads(response.read().decode("utf-8"))
+                package_url = access.get("url")
+                if not package_url:
+                    raise ValueError("Serwer nie udostępnił tymczasowego adresu pakietu.")
+            if not package_url:
+                raise ValueError("Brak adresu pobierania pakietu.")
+            os.makedirs(self.TEMP_DIR, mode=0o700, exist_ok=True)
+            os.chmod(self.TEMP_DIR, 0o700)
+            fd, target = tempfile.mkstemp(prefix=".package-", suffix=".ipk", dir=self.TEMP_DIR)
+            os.close(fd)
+            os.chmod(target, 0o600)
+            digest = hashlib.sha256()
+            size = 0
+            with urllib.request.urlopen(package_url, timeout=60) as response, open(target, "wb") as handle:
+                while True:
+                    chunk = response.read(64 * 1024)
+                    if not chunk:
+                        break
+                    size += len(chunk)
+                    if size > self.MAX_PACKAGE_SIZE:
+                        raise ValueError("Pakiet przekracza limit rozmiaru.")
+                    handle.write(chunk)
+                    digest.update(chunk)
+            if digest.hexdigest().lower() != variant["sha256"].lower():
+                try:
+                    os.unlink(target)
+                except OSError:
+                    pass
+                raise ValueError("Nieprawidłowa suma SHA-256 pobranego pakietu.")
+            self.package_path = target
+            utils.log_event("Pakiet pobrany i zweryfikowany", package_id=self.package_id, size=size)
+        except Exception as error:
+            self.error_message = str(error)
+            utils.log_error(error, self.__class__.__name__, package_id=self.package_id)
+            if target:
+                try:
+                    os.unlink(target)
+                except OSError:
+                    pass
+        finally:
+            self._safe_call_main_thread(self.error_message, self.package_path, self.remove_package_names)
+
+
+class ManifestUpdateCheckWorker(BaseWorker):
+    def __init__(self, callback_finished):
+        super(ManifestUpdateCheckWorker, self).__init__(callback_finished)
+
+    @staticmethod
+    def _version_key(value):
+        numbers = re.findall(r"\d+", str(value or ""))
+        return tuple(int(number) for number in numbers) or (0,)
+
+    def _installed_packages(self):
+        installed = {}
+        process = subprocess.Popen(["opkg", "list-installed"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output, _ = process.communicate(timeout=20)
+        if process.returncode:
+            raise RuntimeError("Nie można odczytać listy zainstalowanych pakietów.")
+        for line in output.decode("utf-8", "ignore").splitlines():
+            if " - " in line:
+                package, version = line.split(" - ", 1)
+                installed[package.strip()] = version.strip()
+        return installed
+
+    def _installed_entry_version(self, entry, installed):
+        versions = []
+        for package_name in derive_package_names(entry):
+            version = installed.get(package_name)
+            if version:
+                versions.append(version)
+        return max(versions, key=self._version_key) if versions else ""
+
+    def run(self):
+        try:
+            request = urllib.request.Request(constants.AZMAN_MANIFEST_URL, headers={"User-Agent": "AzmanPanel/1.0"})
+            with urllib.request.urlopen(request, timeout=12) as response:
+                manifest = json.loads(response.read().decode("utf-8"))
+            installed = self._installed_packages()
+            updates = []
+            panel_update = ""
+            for entry in manifest.get("packages", []):
+                package = entry.get("package")
+                remote_version = str(entry.get("version") or "")
+                if not package or not remote_version:
+                    continue
+                local_version = constants.PLUGIN_VERSION if entry.get("id") == "azman-panel" else self._installed_entry_version(entry, installed)
+                if not local_version or self._version_key(remote_version) <= self._version_key(local_version):
+                    continue
+                name = str(entry.get("name") or entry.get("id") or package)
+                if entry.get("id") == "azman-panel":
+                    panel_update = remote_version
+                else:
+                    updates.append((entry.get("id"), name, local_version, remote_version))
+            self._safe_call_main_thread(None, panel_update, updates)
+        except Exception as error:
+            utils.log_error(error, self.__class__.__name__, url=constants.AZMAN_MANIFEST_URL)
+            self._safe_call_main_thread(str(error), "", [])
+
+class PiconZipListWorker(BaseWorker):
+    
+    def __init__(self, callback_finished):
+        super(PiconZipListWorker, self).__init__(callback_finished)
+        self.error_message = None
+        self.picon_zip_filenames = []
+    def run(self):
+        try:
+            with urllib.request.urlopen(constants.PICONS_BASE_URL, timeout=10) as response:
+                payload = json.loads(response.read().decode('utf-8'))
+            self.picon_zip_filenames = [item['name'] for item in payload.get('packages', []) if item.get('name')]
+            self.picon_zip_filenames.sort(key=lambda x: x.lower())
+            if not self.picon_zip_filenames:
+                self.error_message = "Nie znaleziono plików *.zip w katalogu picon."
+        except Exception as e:
+            utils.log_error(e, self.__class__.__name__, url=constants.PICONS_BASE_URL)
+            self.error_message = "Błąd pobierania listy picon."
+        finally:
+            self._safe_call_main_thread(self.error_message, self.picon_zip_filenames)
+
+class PiconInstallationWorker(ProgressWorkerMixin, BaseWorker):
+    
+    def __init__(self, selected_zips, target_dir, callback_progress, callback_finished):
+        super(PiconInstallationWorker, self).__init__(callback_finished)
+        self.selected_zips = selected_zips
+        self.target_dir = target_dir
+        self.callback_progress = callback_progress
+        self._init_progress()
+    def run(self):
+        installed_summary = []
+        total_installed_packages = 0
+        final_message = ""
+        
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                if not os.path.exists(self.target_dir):
+                    os.makedirs(self.target_dir)
+                total_zips = len(self.selected_zips)
+                
+                for i, zip_filename in enumerate(self.selected_zips):
+                    if self._is_cancelled: break
+                    
+                    display_filename = urllib.parse.unquote(zip_filename)
+                    self._safe_call_progress(i, total_zips, f"Pobieranie: {display_filename}")
+                    
+                    safe_name = os.path.basename(zip_filename)
+                    temp_zip_path = os.path.join(temp_dir, safe_name)
+                    query = urllib.parse.urlencode({'name': safe_name})
+                    with urllib.request.urlopen(constants.PICON_URL_API + '?' + query, timeout=20) as response:
+                        access = json.loads(response.read().decode('utf-8'))
+                    picon_zip_url = access.get('url')
+                    if not picon_zip_url:
+                        raise ValueError("Serwer nie udostępnił paczki picon.")
+                    urllib.request.urlretrieve(picon_zip_url, temp_zip_path, reporthook=self._internal_reporthook)
+                    
+                    self._safe_call_progress(i, total_zips, f"Rozpakowywanie: {display_filename}")
+                    
+                    picon_count_in_zip = 0
+                    with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
+                        for member in zip_ref.infolist():
+                            if self._is_cancelled: break
+                            if not member.is_dir() and member.filename.lower().endswith('.png'):
+                                picon_count_in_zip += 1
+                            utils.safe_extract_zip_member(zip_ref, member, self.target_dir)
+
+                    if picon_count_in_zip > 0:
+                        display_name = display_filename.replace('.zip', '')
+                        installed_summary.append(f"- {display_name} ({picon_count_in_zip} picon)")
+                    
+                    total_installed_packages += 1
+
+            if self._is_cancelled:
+                 final_message = "Instalacja anulowana przez użytkownika."
+            elif total_installed_packages > 0:
+                final_message = f"Zainstalowano pomyślnie {total_installed_packages} paczek:\n\n"
+                final_message += "\n".join(installed_summary)
+            else:
+                 final_message = "Nie zainstalowano żadnych paczek."
+
+        except InterruptedError:
+            final_message = "Instalacja anulowana przez użytkownika."
+        except Exception as e:
+            utils.log_error(e, self.__class__.__name__, selected_zips=self.selected_zips, target_dir=self.target_dir)
+            final_message = f"Wystąpił błąd podczas instalacji:\n{e}"
+        finally:
+            self._safe_call_main_thread(final_message)
+            
+class PrivateBouquetListWorker(BaseWorker):
+    def __init__(self, callback_finished):
+        super(PrivateBouquetListWorker, self).__init__(callback_finished)
+
+    def run(self):
+        error_message = None
+        bouquet_filenames = []
+        try:
+            with urllib.request.urlopen(constants.BOUQUETS_LIST_API, timeout=15) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            bouquet_filenames = sorted(
+                [item.get("name") for item in payload.get("packages", []) if item.get("name")],
+                key=lambda name: name.lower()
+            )
+            bouquet_filenames = [utils.validate_bouquet_filename(name) for name in bouquet_filenames]
+            if not bouquet_filenames:
+                error_message = "Nie znaleziono dostępnych bukietów IPTV PL."
+        except Exception as error:
+            utils.log_error(error, self.__class__.__name__, url=constants.BOUQUETS_LIST_API)
+            error_message = "Nie udało się pobrać listy bukietów IPTV PL."
+        finally:
+            self._safe_call_main_thread(error_message, bouquet_filenames)
+
+class BouquetWrapperDetectionWorker(BaseWorker):
+    """Pobiera zawartość wybranych bukietów i sprawdza, czy zawierają wpisy
+    YT-DLP Wrapper / YT-DL Wrapper - zanim user zdecyduje, czy przekonwertować
+    je na obsługę przez streamlink."""
+
+    def __init__(self, selected_bouquets, callback_finished):
+        super(BouquetWrapperDetectionWorker, self).__init__(callback_finished)
+        self.selected_bouquets = selected_bouquets
+
+    def run(self):
+        error_message = None
+        wrapper_bouquets = []
+        try:
+            for source_filename in self.selected_bouquets:
+                if self._is_cancelled:
+                    raise InterruptedError("Detection cancelled")
+                validated = utils.validate_bouquet_filename(source_filename)
+                query = urllib.parse.urlencode({"name": validated})
+                with urllib.request.urlopen(constants.BOUQUET_URL_API + "?" + query, timeout=20) as response:
+                    access = json.loads(response.read().decode("utf-8"))
+                download_url = access.get("url")
+                if not download_url:
+                    raise ValueError("Serwer nie udostępnił wybranego bukietu.")
+                with urllib.request.urlopen(download_url, timeout=20) as response:
+                    content = response.read().decode("utf-8", errors="replace")
+                if utils.YT_WRAPPER_SCHEME_RE.search(content):
+                    wrapper_bouquets.append(source_filename)
+        except InterruptedError:
+            error_message = "Sprawdzanie zawartości anulowane przez użytkownika."
+        except Exception as error:
+            utils.log_error(error, self.__class__.__name__, selected_bouquets=self.selected_bouquets)
+            error_message = "Wystąpił błąd podczas sprawdzania bukietu: %s" % error
+        finally:
+            self._safe_call_main_thread(error_message, wrapper_bouquets)
+
+class PrivateBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
+    def __init__(self, selected_bouquets, callback_progress, callback_finished, convert_to_streamlink=None):
+        super(PrivateBouquetInstallWorker, self).__init__(callback_finished)
+        self.selected_bouquets = selected_bouquets
+        self.convert_to_streamlink = set(convert_to_streamlink or ())
+        self.callback_progress = callback_progress
+        self._init_progress()
+
+    def run(self):
+        target_dir = "/etc/enigma2"
+        error_message = None
+        final_message = ""
+        try:
+            source_filenames = [utils.validate_bouquet_filename(name) for name in self.selected_bouquets]
+            filenames = [utils.panel_bouquet_filename(name) for name in source_filenames]
+            for index, (source_filename, filename) in enumerate(zip(source_filenames, filenames)):
+                if self._is_cancelled:
+                    raise InterruptedError("Installation cancelled")
+                self._safe_call_progress(index, len(filenames), "Pobieranie: %s" % source_filename)
+                query = urllib.parse.urlencode({"name": source_filename})
+                with urllib.request.urlopen(constants.BOUQUET_URL_API + "?" + query, timeout=20) as response:
+                    access = json.loads(response.read().decode("utf-8"))
+                download_url = access.get("url")
+                if not download_url:
+                    raise ValueError("Serwer nie udostępnił wybranego bukietu.")
+                target_path = os.path.join(target_dir, filename)
+                if source_filename in self.convert_to_streamlink:
+                    with urllib.request.urlopen(download_url, timeout=20) as response:
+                        content = response.read().decode("utf-8")
+                    content = utils.convert_yt_wrapper_entries_to_streamlink(content)
+                    utils.atomic_write_lines(target_path, [content])
+                else:
+                    urllib.request.urlretrieve(download_url, target_path, reporthook=self._internal_reporthook)
+                if source_filename != filename:
+                    utils.remove_bouquet_and_registration(target_dir, source_filename)
+
+            self._safe_call_progress(len(filenames), len(filenames), "Aktualizowanie bouquets.tv...")
+            utils.register_bouquets(target_dir, filenames)
+
+            self._safe_call_progress(len(filenames), len(filenames), "Przeładowywanie listy kanałów...")
+            reload_service_lists()
+            final_message = "Zainstalowano %d bukiet(ów). Lista kanałów została przeładowana." % len(filenames)
+        except InterruptedError:
+            error_message = "Instalacja anulowana przez użytkownika."
+        except Exception as error:
+            utils.log_error(error, self.__class__.__name__, selected_bouquets=self.selected_bouquets)
+            error_message = "Wystąpił błąd podczas instalacji: %s" % error
+        finally:
+            self._safe_call_main_thread(error_message, final_message)
+
+class IptvBouquetUninstallWorker(ProgressWorkerMixin, BaseWorker):
+    
+    def __init__(self, selected_bouquets, callback_progress, callback_finished):
+        super(IptvBouquetUninstallWorker, self).__init__(callback_finished)
+        self.selected_bouquets = selected_bouquets
+        self.callback_progress = callback_progress
+        self._init_progress()
+            
+    def run(self):
+        error_message = None
+        final_message = ""
+        target_dir = "/etc/enigma2"
+        bouquets_tv_path = os.path.join(target_dir, "bouquets.tv")
+
+        try:
+            self.selected_bouquets = [utils.panel_bouquet_filename(name) for name in self.selected_bouquets]
+            total_bouquets = len(self.selected_bouquets)
+            for i, filename in enumerate(self.selected_bouquets):
+                if self._is_cancelled: raise InterruptedError("Uninstallation cancelled")
+                self._safe_call_progress(i, total_bouquets, f"Usuwanie: {filename}")
+
+                target_path = os.path.join(target_dir, filename)
+                if os.path.exists(target_path):
+                    os.remove(target_path)
+
+            self._safe_call_progress(total_bouquets, total_bouquets, "Aktualizowanie bouquets.tv...")
+
+            if os.path.exists(bouquets_tv_path):
+                with open(bouquets_tv_path, "r") as f:
+                    lines = f.readlines()
+
+                selected_lines = {
+                    f'FROM BOUQUET "{name}"' for name in self.selected_bouquets
+                }
+                new_lines = [line for line in lines if not any(marker in line for marker in selected_lines)]
+
+                utils.atomic_write_lines(bouquets_tv_path, new_lines)
+
+            self._safe_call_progress(total_bouquets, total_bouquets, "Przeładowywanie listy kanałów...")
+
+            reload_service_lists()
+            final_message = f"Odinstalowano pomyślnie {len(self.selected_bouquets)} bukiet(ów).\nLista kanałów została przeładowana."
+
+        except InterruptedError:
+            error_message = "Odinstalowywanie anulowane przez użytkownika."
+        except Exception as e:
+            utils.log_error(e, self.__class__.__name__, selected_bouquets=self.selected_bouquets)
+            error_message = f"Wystąpił błąd podczas odinstalowywania:\n{e}"
+        finally:
+            self._safe_call_main_thread(error_message, final_message)
+
+
+class _RadioApiBouquetWorker(BaseWorker):
+    def _write_bouquet(self, filename, title, stations, service_type="2",
+                        legacy_filename=None, name_suffix=" (azman)"):
+        path = os.path.join("/etc/enigma2", filename)
+        lines = ["#NAME %s%s\n" % (title, name_suffix)]
+        mapper = PanelEpgMapper()
+        mapper.provider_id = filename.removeprefix("userbouquet.azmanpanel_").rsplit(".", 1)[0]
+        mapper.prefetch([name for name, _url in stations])
+        for name, url in stations:
+            name = re.sub(r"[\r\n:]", " ", str(name)).strip()
+            encoded = urllib.parse.quote(str(url), safe="")
+            reference = mapper.reference(name)
+            prefix = "4097:%s" % reference if reference else "4097:0:%s:0:0:0:0:0:0:0" % service_type
+            lines.append("#SERVICE %s:%s:%s\n" % (prefix, encoded, name))
+            lines.append("#DESCRIPTION %s\n" % name)
+        if hasattr(mapper, "save_report"):
+            mapper.save_report()
+        if not stations:
+            raise ValueError("Nie znaleziono dostępnych stacji radiowych.")
+        utils.atomic_write_lines(path, lines)
+        if legacy_filename is None:
+            legacy_filename = filename.replace("userbouquet.azmanpanel_", "userbouquet.azman_iptv_", 1)
+        if legacy_filename:
+            utils.remove_bouquet_and_registration("/etc/enigma2", legacy_filename)
+        bouquets = "/etc/enigma2/bouquets.tv"
+        existing = open(bouquets, "r").readlines() if os.path.exists(bouquets) else []
+        marker = '#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "%s" ORDER BY bouquet\n' % filename
+        if not any(filename in line for line in existing):
+            existing.append(marker)
+            utils.atomic_write_lines(bouquets, existing)
+        reload_service_lists()
+        import_epg_events_async(logger=lambda message: utils.log_event("EPG events: %s" % message), pattern=path)
+
+
+class MyRadioOnlineBouquetWorker(_RadioApiBouquetWorker):
+    """Pobiera publiczny katalog MyRadioOnline i tworzy bukiet radiowy."""
+
+    def __init__(self, callback_finished):
+        super(MyRadioOnlineBouquetWorker, self).__init__(callback_finished)
+
+    @staticmethod
+    def _bitrate(value):
+        match = re.search(r"\d+", str(value or ""))
+        return int(match.group(0)) if match else 0
+
+    def run(self):
+        bouquet_path = os.path.join("/etc/enigma2", constants.MYRADIOONLINE_BOUQUET_FILENAME)
+        try:
+            now = datetime.now().strftime("%Y-%m-%d_%H")
+            request = urllib.request.Request(
+                constants.MYRADIOONLINE_API_URL,
+                data=urllib.parse.urlencode({
+                    "ver": "andr1439",
+                    "sec-key": "a_febe521d77cbd235bc27268789e8592bb9378cb47e4e5fd5dc89493578a64049ec2c8282eda9a80d720e656c8639ba7ea1d5bf8812b0a5a198373164acf35fd6",
+                    "time": now,
+                }).encode("utf-8"),
+                headers={
+                    "User-Agent": "okhttp/3.12.12 - hu.myonlineradio.radio.pl.myonlineradio.onlineradioapplication",
+                    "Referer": "https://myradioonline.pl",
+                    "Accept": "application/json",
+                },
+            )
+            with urllib.request.urlopen(request, timeout=25) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            radios = payload.get("radios") if isinstance(payload, dict) else []
+            stations = []
+            seen = set()
+            for radio in radios or []:
+                if not isinstance(radio, dict):
+                    continue
+                name = str(radio.get("r_name") or "").strip()
+                streams = radio.get("streamServers") or {}
+                candidates = []
+                for stream in streams.values():
+                    if not isinstance(stream, dict):
+                        continue
+                    url = str(stream.get("rsu_url") or "").strip()
+                    if url.startswith(("http://", "https://")):
+                        candidates.append((self._bitrate(stream.get("rsu_bandwidth")), url))
+                if not name or not candidates:
+                    continue
+                candidates.sort(key=lambda item: item[0], reverse=True)
+                _bitrate, stream_url = candidates[0]
+                if stream_url in seen:
+                    continue
+                seen.add(stream_url)
+                stations.append((name, stream_url))
+            self._write_bouquet(constants.MYRADIOONLINE_BOUQUET_FILENAME, "MyRadioOnline", stations)
+            self.final_message = "Utworzono bukiet MyRadioOnline.\n\nDodano %d stacji radiowych." % len(stations)
+        except Exception as error:
+            utils.log_error(error, self.__class__.__name__, target=bouquet_path)
+            self.error_message = "Nie udało się utworzyć bukietu MyRadioOnline:\n%s" % error
+        finally:
+            if not self._is_cancelled:
+                self._safe_call_main_thread(getattr(self, "error_message", None), getattr(self, "final_message", None))
+
+
+class PolskieRadioBouquetWorker(_RadioApiBouquetWorker):
+    def __init__(self, callback_finished):
+        super(PolskieRadioBouquetWorker, self).__init__(callback_finished)
+
+    def run(self):
+        bouquet_path = os.path.join("/etc/enigma2", constants.POLSKIE_RADIO_BOUQUET_FILENAME)
+        try:
+            self._write_bouquet(constants.POLSKIE_RADIO_BOUQUET_FILENAME, "Polskie Radio", list(constants.POLSKIE_RADIO_STREAMS))
+            self.final_message = "Utworzono bukiet Polskie Radio.\n\nDodano %d stacji radiowych." % len(constants.POLSKIE_RADIO_STREAMS)
+        except Exception as error:
+            utils.log_error(error, self.__class__.__name__, target=bouquet_path)
+            self.error_message = "Nie udało się utworzyć bukietu Polskie Radio:\n%s" % error
+        finally:
+            if not self._is_cancelled:
+                self._safe_call_main_thread(getattr(self, "error_message", None), getattr(self, "final_message", None))
+
+
+class RmfonBouquetWorker(_RadioApiBouquetWorker):
+    def run(self):
+        try:
+            headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+            req = urllib.request.Request(constants.RMFON_API_URL + "stations", headers=headers)
+            with urllib.request.urlopen(req, timeout=25) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            stations = []
+            for item in payload if isinstance(payload, list) else payload.get("stations", []):
+                sid = item.get("id") or item.get("station_id")
+                name = item.get("name") or item.get("title")
+                if not sid or not name: continue
+                req = urllib.request.Request(constants.RMFON_API_URL + "stations/%s/streams" % sid, headers=headers)
+                with urllib.request.urlopen(req, timeout=25) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+                candidates = []
+                for key in ("playlist", "playlistMp3"):
+                    group = data.get(key, {}) if isinstance(data, dict) else {}
+                    values = group.get("item", []) if key == "playlist" else group.get("item_mp3", [])
+                    candidates.extend(v for v in values if isinstance(v, str) and v.startswith("http"))
+                if candidates: stations.append((name, candidates[0]))
+            self._write_bouquet(constants.RMFON_BOUQUET_FILENAME, "RMF ON", stations)
+            self.final_message = "Utworzono bukiet RMF ON.\n\nDodano %d stacji radiowych." % len(stations)
+        except Exception as error:
+            self.error_message = "Nie udało się utworzyć bukietu RMF ON:\n%s" % error
+        finally:
+            if not self._is_cancelled: self._safe_call_main_thread(getattr(self, "error_message", None), getattr(self, "final_message", None))
+
+
+class EurozetBouquetWorker(_RadioApiBouquetWorker):
+    def run(self):
+        try:
+            headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+            stations = []
+            for slug, title in constants.EUROZET_STATIONS:
+                url = constants.EUROZET_API_URL + "stations/(station)/" + slug
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=25) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+                stream = ((data.get("player") or {}).get("stream") if isinstance(data, dict) else None)
+                if stream: stations.append((title, stream))
+            self._write_bouquet(constants.EUROZET_BOUQUET_FILENAME, "Eurozet", stations)
+            self.final_message = "Utworzono bukiet Eurozet.\n\nDodano %d stacji radiowych." % len(stations)
+        except Exception as error:
+            self.error_message = "Nie udało się utworzyć bukietu Eurozet:\n%s" % error
+        finally:
+            if not self._is_cancelled: self._safe_call_main_thread(getattr(self, "error_message", None), getattr(self, "final_message", None))
+
+
+
+
+class IptvOrgWorker(_RadioApiBouquetWorker):
+    def __init__(self, callback_finished):
+        super(IptvOrgWorker, self).__init__(callback_finished)
+        self.error_message = None
+        self.final_message = None
+
+    def run(self):
+        m3u_url = "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/pl.m3u"
+        bouquet_filepath = os.path.join("/etc/enigma2", constants.IPTVORG_BOUQUET_FILENAME)
+
+        try:
+            with urllib.request.urlopen(m3u_url, timeout=20) as response:
+                m3u_content = response.read().decode('utf-8')
+
+            if self._is_cancelled: raise InterruptedError()
+
+            channels = []
+            lines = m3u_content.splitlines()
+            for i, line in enumerate(lines):
+                if line.startswith("#EXTINF:-1"):
+                    try:
+                        channel_name = re.search(r'tvg-name="([^"]+)"', line)
+                        if not channel_name:
+                            channel_name = line.split(',')[-1]
+                        else:
+                            channel_name = channel_name.group(1)
+
+                        stream_url = lines[i+1].strip()
+
+                        if channel_name and stream_url:
+                            cleaned_name = channel_name.replace(':', ' ')
+                            channels.append((cleaned_name, stream_url))
+                    except IndexError:
+                        continue
+
+            if self._is_cancelled: raise InterruptedError()
+
+            if not channels:
+                raise ValueError("Nie znaleziono żadnych kanałów w pobranej liście M3U.")
+
+            self._write_bouquet(constants.IPTVORG_BOUQUET_FILENAME, "IPTV.ORG Poland", channels,
+                                 service_type="1", legacy_filename="userbouquet.iptv-org-pl.tv", name_suffix="")
+
+            self.final_message = f"Utworzono bukiet IPTV.ORG Poland.\n\nDodano {len(channels)} kanałów.\nLista kanałów została odświeżona."
+
+        except InterruptedError:
+            self.error_message = "Operacja anulowana przez użytkownika."
+        except Exception as e:
+            utils.log_error(e, self.__class__.__name__, url=m3u_url, target=bouquet_filepath)
+            self.error_message = f"Wystąpił błąd:\n{e}"
+        finally:
+            if not self._is_cancelled:
+                self._safe_call_main_thread(self.error_message, self.final_message)

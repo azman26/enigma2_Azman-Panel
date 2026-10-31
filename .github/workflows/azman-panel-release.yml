@@ -1,0 +1,159 @@
+name: Azman Panel - automatyczny Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '*.py'
+      - 'icons/**'
+      - 'panel_skin.xml'
+      - 'plugin.png'
+      - 'packaging/**'
+      - '.github/workflows/azman-panel-release.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Wersja YYYY.MM.DD-HHMM; puste = czas Europe/Warsaw. Publikuje Release z IPK."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: azman-panel-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Ustal wersje i tag
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess
+          from datetime import datetime, timedelta
+          from zoneinfo import ZoneInfo
+          pattern = r"v[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{4}"
+          tags = subprocess.check_output(['git', 'tag'], text=True).splitlines()
+          tags = [tag for tag in tags if re.fullmatch(pattern, tag)]
+          attached = subprocess.check_output(['git', 'tag', '--points-at', 'HEAD'], text=True).splitlines()
+          requested = os.environ.get('INPUT_VERSION', '')
+          if requested:
+              version = requested
+          elif any(tag in tags for tag in attached):
+              version = max(tag for tag in attached if tag in tags)[1:]
+          else:
+              moment = datetime.now(ZoneInfo('Europe/Warsaw')).replace(second=0, microsecond=0, tzinfo=None)
+              if tags:
+                  latest = datetime.strptime(max(tags)[1:], '%Y.%m.%d-%H%M')
+                  moment = max(moment, latest + timedelta(minutes=1))
+              version = moment.strftime('%Y.%m.%d-%H%M')
+          if not re.fullmatch(r"[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{4}", version):
+              raise ValueError('Nieprawidlowa wersja')
+          datetime.strptime(version, '%Y.%m.%d-%H%M')
+          tag = 'v' + version
+          if tag in tags:
+              target = subprocess.check_output(['git', 'rev-parse', tag + '^{}'], text=True).strip()
+              head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+              if target != head:
+                  raise ValueError('Tag wskazuje inny commit: ' + tag)
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write('version=' + version + '\n')
+              output.write('tag=' + tag + '\n')
+          PY
+
+      - name: Zbuduj IPK
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SOURCE_DIR: ${{ github.workspace }}
+          OUTPUT_DIR: ${{ github.workspace }}/build/ipk
+        run: python3 packaging/build_ipk.py
+
+      - name: Sprawdz wynik i SHA256
+        id: artifact
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          NAME="enigma2-plugin-extensions--azman-azmanpanel_${VERSION}_all.ipk"
+          FILE="build/ipk/all/$NAME"
+          test -s "$FILE"
+          test "$(find build/ipk -type f -name '*.ipk' | wc -l)" -eq 1
+          SHA256="$(sha256sum "$FILE" | cut -d ' ' -f 1)"
+          echo "path=$FILE" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Zachowaj IPK jako artefakt
+        uses: actions/upload-artifact@v4
+        with:
+          name: azman-panel-ipk-${{ steps.version.outputs.version }}
+          path: ${{ steps.artifact.outputs.path }}
+          if-no-files-found: error
+
+      - name: Utworz Release i wgraj IPK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          IPK_PATH: ${{ steps.artifact.outputs.path }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --target "$SOURCE_SHA" --title "Azman Panel ${RELEASE_TAG#v}" --notes "Automatyczne wydanie po aktualizacji kodu na main."
+          fi
+          gh release upload "$RELEASE_TAG" "$IPK_PATH" --clobber
+
+      - name: Zweryfikuj pobranie zalacznika przed zmiana manifestu
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          IPK_NAME: ${{ steps.artifact.outputs.name }}
+          IPK_SHA256: ${{ steps.artifact.outputs.sha256 }}
+        run: |
+          gh release download "$RELEASE_TAG" --pattern "$IPK_NAME" --dir build/verified
+          printf '%s  %s\n' "$IPK_SHA256" "build/verified/$IPK_NAME" | sha256sum --check -
+
+      - name: Zachowaj helper z testowanego wydania
+        run: cp packaging/update_manifest.py "$RUNNER_TEMP/azman-update-manifest.py"
+
+      - name: Pobierz aktualna galaz feedu
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git fetch origin "$DEFAULT_BRANCH"
+          git checkout -B azman-feed-update FETCH_HEAD
+
+      - name: Zaktualizuj manifest Panelu adresem IPK z Release
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          IPK_NAME: ${{ steps.artifact.outputs.name }}
+          IPK_SHA256: ${{ steps.artifact.outputs.sha256 }}
+        run: |
+          python3 "$RUNNER_TEMP/azman-update-manifest.py" feed/manifest.json "$REPOSITORY" "$RELEASE_TAG" "$VERSION" "$IPK_NAME" "$IPK_SHA256"
+
+      - name: Zapisz manifest
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add feed/manifest.json
+          if git diff --cached --quiet; then
+            echo "Manifest jest ju? aktualny."
+          else
+            git commit -m "feed: azman-panel $VERSION"
+            git push origin "HEAD:$DEFAULT_BRANCH"
+          fi
