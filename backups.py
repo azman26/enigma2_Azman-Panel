@@ -22,10 +22,14 @@ ANY_BOUQUET = re.compile(r"^userbouquet\.[A-Za-z0-9_.-]+\.(?:tv|radio)$")
 class BackupStore:
     def __init__(self, etc="/etc"):
         self.etc = Path(etc)
-        self.directory = self.etc / "AzmanPanel" / "backups"
+        # Boxes may relocate whole configuration directories to HDD. Pin their
+        # resolved roots once, while still rejecting symlinked individual files.
+        self.roots = {name: (self.etc / name).resolve()
+                      for name in ("AzmanPanel", "AzmanFreeTVPlayer", "enigma2")}
+        self.directory = self.roots["AzmanPanel"] / "backups"
 
     def _directory(self):
-        for path in (self.etc / "AzmanPanel", self.directory):
+        for path in (self.roots["AzmanPanel"], self.directory):
             if path.is_symlink():
                 raise ValueError("Niedozwolony odnośnik w katalogu kopii")
             path.mkdir(mode=0o700, exist_ok=True)
@@ -43,7 +47,8 @@ class BackupStore:
     def _path(self, name):
         if not self._allowed(name):
             raise ValueError("Niedozwolona ścieżka w kopii")
-        target = self.etc / name
+        directory, filename = name.split("/")
+        target = self.roots[directory] / filename
         if target.parent.is_symlink() or target.is_symlink():
             raise ValueError("Niedozwolony odnośnik w konfiguracji")
         return target
@@ -87,18 +92,23 @@ class BackupStore:
         total = 0
         candidates = []
         for folder in ("AzmanPanel", "AzmanFreeTVPlayer", "enigma2"):
-            parent = self.etc / folder
+            parent = self.roots[folder]
             if parent.is_symlink():
                 raise ValueError("Niedozwolony odnośnik w konfiguracji")
             if parent.is_dir():
-                candidates.extend(parent.iterdir())
-        for path in sorted(candidates):
-            name = path.relative_to(self.etc).as_posix()
-            if path.parent.name == "enigma2" and ANY_BOUQUET.fullmatch(path.name) and not BOUQUET.fullmatch(path.name) and path.name not in extra_bouquets:
+                candidates.extend((folder, path) for path in parent.iterdir())
+        for folder, path in sorted(candidates):
+            name = folder + "/" + path.name
+            if folder == "enigma2" and ANY_BOUQUET.fullmatch(path.name) and not BOUQUET.fullmatch(path.name) and path.name not in extra_bouquets:
                 continue
             if not self._allowed(name):
                 continue
-            data = self._read(self._path(name))
+            try:
+                data = self._read(self._path(name))
+            except (ValueError, OSError) as error:
+                # Filenames and validation reasons are useful diagnostics;
+                # file contents (including accounts/tokens) never enter logs.
+                raise ValueError("Nie można skopiować %s: %s" % (name, error)) from error
             if name == "enigma2/settings":
                 data = b"".join(line for line in data.splitlines(keepends=True) if line.startswith(tuple(p.encode() for p in PREFIXES)))
             elif name in ("enigma2/bouquets.tv", "enigma2/bouquets.radio"):
@@ -170,7 +180,8 @@ def main():
             return 1
         return 0
     except Exception as error:
-        print("Operacja kopii nie powiodła się: " + type(error).__name__)
+        detail = str(error).replace("\r", " ").replace("\n", " ")[:512]
+        print("Operacja kopii nie powiodła się: %s: %s" % (type(error).__name__, detail))
         return 1
     finally:
         os.close(fd)
