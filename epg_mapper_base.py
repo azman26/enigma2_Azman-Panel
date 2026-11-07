@@ -5,6 +5,10 @@ import json
 import os
 import re
 import time
+import sys
+import types
+import threading
+from email.utils import parsedate_to_datetime
 
 try:
     from urllib.request import Request, urlopen
@@ -20,6 +24,21 @@ from .epg_reports import merge_report
 from .epg_http_transport import private_urlopen as urlopen
 
 from .epg_profile import EPG_EXCLUDED_PROVIDERS, REPORT_PREFIX
+
+_RATE_STATE = sys.modules.setdefault('_azman_epg_mapping_rate', types.ModuleType('_azman_epg_mapping_rate'))
+_RATE_LOCK = _RATE_STATE.__dict__.setdefault('lock', threading.RLock())
+
+
+def _retry_delay(headers):
+    value = str(headers.get('Retry-After', '') if headers else '').strip()
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            seconds = parsedate_to_datetime(value).timestamp() - time.time()
+        except (ValueError, TypeError, OverflowError):
+            seconds = 60
+    return max(1, min(86400, seconds))
 
 class FreeTvEpgMapper(object):
     REPORT_FILE = REPORT_PREFIX + "_missing_mappings.json"
@@ -65,11 +84,27 @@ class FreeTvEpgMapper(object):
         return values
 
     def prefetch(self, names):
+        # Resolve primary names first. Only unresolved channels need aliases;
+        # asking for name + .pl unconditionally consumed the server budget twice.
+        groups = [self._candidates(name) for name in names or []]
+        for position in range(max((len(group) for group in groups), default=0)):
+            requested = []
+            for group in groups:
+                if any(self.cache.get(candidate) for candidate in group):
+                    continue
+                if any(candidate in self.failed for candidate in group):
+                    continue
+                if position < len(group):
+                    candidate = group[position]
+                    if candidate not in self.cache and candidate not in requested:
+                        requested.append(candidate)
+            self._prefetch_candidates(requested)
+
+    def _prefetch_candidates(self, names):
         requested = []
         for name in names or []:
-            for candidate in self._candidates(name):
-                if candidate not in self.cache and candidate not in self.failed and candidate not in requested:
-                    requested.append(candidate)
+            if name not in self.cache and name not in self.failed and name not in requested:
+                requested.append(name)
         if not requested:
             return
         if not self.available():
@@ -100,6 +135,12 @@ class FreeTvEpgMapper(object):
         return any(candidate in self.failed for candidate in self._candidates(name))
 
     def _request(self, names):
+        with _RATE_LOCK:
+            remaining = int(getattr(_RATE_STATE, 'retry_at', 0) - time.time())
+        if remaining > 0:
+            self.failed.update(names)
+            self._log('mapping deferred after HTTP 429; retry in %ds; existing references retained' % remaining)
+            return
         config = self._config()
         payload = json.dumps({
             "box_id": str(config.get("box_id") or "").strip(),
@@ -121,6 +162,9 @@ class FreeTvEpgMapper(object):
             finally:
                 response.close()
             mappings = result.get("mappings")
+            # Legacy PHP encodes an empty associative array as [] instead of {}.
+            if mappings == []:
+                mappings = {}
             if not isinstance(mappings, dict):
                 raise ValueError("Invalid EPG mappings")
             self.failed.difference_update(names)
@@ -136,6 +180,11 @@ class FreeTvEpgMapper(object):
                 sum(1 for name in names if self.cache.get(name)), len(names)
             ))
         except HTTPError as error:
+            if error.code == 429:
+                delay = _retry_delay(error.headers)
+                with _RATE_LOCK:
+                    _RATE_STATE.retry_at = max(getattr(_RATE_STATE, 'retry_at', 0), time.time() + delay)
+                self._log('server rate limit reached; mapping paused for %ds' % delay)
             if error.code == 403:
                 epg_access.invalidate_registration()
             self._log("private EPG API failed: %s" % epg_access.describe_error(error))
