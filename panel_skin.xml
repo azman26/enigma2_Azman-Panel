@@ -14,20 +14,18 @@
         <eLabel position="638,98" size="3,27" backgroundColor="#777777" />
         <widget name="tab_3" position="656,93" size="338,36" font="Regular;26" halign="left" valign="center" foregroundColor="#FFFFFF" transparent="1" />
         <eLabel position="999,98" size="3,27" backgroundColor="#777777" />
-        <widget name="tab_4" position="1017,93" size="82,36" font="Regular;26" halign="left" valign="center" foregroundColor="#FFFFFF" transparent="1" />
+        <widget name="tab_4" position="1017,93" size="190,36" font="Regular;26" halign="left" valign="center" foregroundColor="#FFFFFF" transparent="1" />
+        <eLabel position="1215,98" size="3,27" backgroundColor="#777777" />
+        <widget name="tab_5" position="1233,93" size="190,36" font="Regular;26" halign="left" valign="center" foregroundColor="#FFFFFF" transparent="1" />
 
         <eLabel position="1342,158" size="548,765" backgroundColor="#33000000" zPosition="0" />
         <eLabel position="1342,158" size="548,3" backgroundColor="#00bcd4" zPosition="1" />
         <widget name="plugin_info_title" position="1372,189" size="495,57" font="Regular;36" halign="left" valign="center" foregroundColor="#39c0e0" transparent="1" zPosition="2" />
         <widget name="plugin_info_version" position="1372,255" size="495,39" font="Regular;26" halign="left" valign="center" foregroundColor="#cccccc" transparent="1" zPosition="2" />
         <widget name="plugin_info_desc" position="1372,322" size="495,510" font="Regular;27" halign="left" valign="top" foregroundColor="#FFFFFF" transparent="1" zPosition="2" />
-        <widget name="info_nav_left" position="12,120" size="28,36" font="Regular;27" halign="center" valign="center" foregroundColor="#39c0e0" transparent="1" zPosition="3" />
-        <widget name="info_tab_0" position="45,120" size="210,36" font="Regular;27" halign="left" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
-        <widget name="info_separator_v" position="270,126" size="2,25" backgroundColor="#777777" zPosition="3" />
-        <widget name="info_tab_1" position="285,120" size="260,36" font="Regular;27" halign="left" valign="center" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
-        <widget name="info_nav_right" position="550,120" size="28,36" font="Regular;27" halign="center" valign="center" foregroundColor="#39c0e0" transparent="1" zPosition="3" />
-        <widget name="info_separator_h" position="45,158" size="1252,2" backgroundColor="#00bcd4" zPosition="3" />
         <widget name="info_content" position="45,180" size="1252,710" font="Regular;30" halign="left" valign="top" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
+        <widget name="updates_actions" position="45,180" size="1252,210" font="Regular;30" itemHeight="64" scrollbarMode="showNever" transparent="1" zPosition="4" />
+        <widget name="updates_status" position="45,420" size="1252,470" font="Regular;28" halign="left" valign="top" foregroundColor="#FFFFFF" transparent="1" zPosition="3" />
 
         <!-- RZĄD 1 (Górny) -->
         <widget name="marker_0x0" position="30,165" size="308,188" alphatest="blend" />

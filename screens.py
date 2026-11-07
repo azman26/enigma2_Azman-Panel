@@ -216,9 +216,9 @@ class OpkgCommandScreen(Screen):
         self["status"] = Label("Trwa instalacja. Proszę czekać…")
         self["key_hint"] = Label("Przebieg instalacji")
         self["actions"] = ActionMap(
-            ["OkCancelActions", "DirectionActions"],
+            ["OkCancelActions", "DirectionActions"], 
             {
-                "ok": self.keyOk,
+                "ok": self.keyOk, 
                 "cancel": self.keyOk,
                 "up": self.pageUp,
                 "down": self.pageDown
@@ -262,12 +262,12 @@ class OpkgCommandScreen(Screen):
             self._ask_for_restart()
         else:
             self.appendText("\nNaciśnij OK/EXIT, aby zamknąć.")
-
+    
     def appendText(self, text):
         current_text = self["console"].getText()
         self["console"].setText(current_text + text)
         self["console"].lastPage()
-
+    
     def keyOk(self):
         if self.is_finished:
             if self.callback:
@@ -279,12 +279,12 @@ class OpkgCommandScreen(Screen):
     def _ask_for_restart(self):
         self.session.openWithCallback(
             self._do_restart,
-            MessageBox,
-            "Instalacja zakończona.\n\nZalecany jest restart interfejsu graficznego (GUI).\n\nCzy chcesz zrestartować teraz?",
+            MessageBox, 
+            "Instalacja zakończona.\n\nZalecany jest restart interfejsu graficznego (GUI).\n\nCzy chcesz zrestartować teraz?", 
             type=MessageBox.TYPE_YESNO,
             default=True
         )
-
+    
     def _do_restart(self, confirmed):
         if confirmed:
             self.session.open(TryQuitMainloop, 3)
@@ -367,22 +367,21 @@ class AzmanPanelMainScreen(Screen):
         self.available_package_updates = []
         self.update_check_error = ""
         self._plugins_update_queue = []
-        self.info_subtab_index = 0
         utils.log_event("Otwarto Azman Panel", version=constants.PLUGIN_VERSION)
-
-
+        
+        
         self.GRID_ROWS, self.GRID_COLS = 3, 4
         self.GRID_WIDGET_COLS = 6
-
+        
         self.menu_items = []
         self.all_menu_items = []
-        self.tabs = ["Pluginy", "Bukiety/Listy kanałów", "EPG/Picony", "Narzędzia/Inne wtyczki", "Info"]
+        self.tabs = ["Pluginy", "Bukiety/Listy kanałów", "EPG/Picony", "Narzędzia/Inne wtyczki", "Aktualizacje", "Informacje"]
         self.current_tab_index = 0
         self.markerPixmap = LoadPixmap(f"{PLUGIN_PATH}/icons/marker-cyan.png")
         self.selected_pos = (0, 0)
 
         self.open_timer = eTimer()
-
+        
         self["title"] = Label("Azman Panel")
         self["credits_label"] = Label(constants.PLUGIN_VERSION)
         self["key_red"] = StaticText("Zamknij")
@@ -392,18 +391,14 @@ class AzmanPanelMainScreen(Screen):
         self["description"] = Label("")
         self["selected_title"] = StaticText("")
         self["tabs"] = Label("")
-        for index in range(5):
+        for index in range(len(self.tabs)):
             self["tab_%d" % index] = Label("")
         self["plugin_info_title"] = Label("")
         self["plugin_info_version"] = Label("")
         self["plugin_info_desc"] = Label("")
         self["info_content"] = Label("")
-        self["info_tab_0"] = Label("")
-        self["info_tab_1"] = Label("")
-        self["info_separator_v"] = Label("")
-        self["info_separator_h"] = Label("")
-        self["info_nav_left"] = Label("<")
-        self["info_nav_right"] = Label(">")
+        self["updates_actions"] = MenuList([])
+        self["updates_status"] = Label("")
         for r in range(self.GRID_ROWS):
             for c in range(self.GRID_WIDGET_COLS):
                 self[f"logo_{r}x{c}"], self[f"marker_{r}x{c}"] = Pixmap(), Pixmap()
@@ -440,18 +435,18 @@ class AzmanPanelMainScreen(Screen):
 
     def prepare_menu(self):
         menu_definitions = [
-
+            
             ("FreeTV Player", self.start_freetvplayer_install, "icon_freetv_player.png", "Odtwarzacz bezpłatnych kanałów internetowych. Umożliwia generowanie bukietów Enigma2 dla dostępnych providerów i odtwarzanie ich przez lokalne proxy HLS/TS. Na niektórych serwisach jest wymagane założenie darmowego konta bez wykupionych subskrypcji."),
             ("Stacja Meteo MMz", self.start_stacjameteommz_install, "icon_stacjameteommz.png", "Szczeg\u00f3\u0142owe dane pogodowe, wiatr, opady, jako\u015b\u0107 powietrza i astronomia. Lokalne dane meteo dla miasta Mi\u0144sk Maz.\nKartka z kalendarza: imieniny, \u015bwi\u0119ta, przys\u0142owie, cytat dnia, porady ogrodnicze, wp\u0142yw Ksi\u0119\u017cyca i biorytm."),
-
+            
             ("Bukiety IPTV PL", self.open_iptv_bouquet_manager, "icon_iptv_pl.png", "Polskie kana\u0142y IPTV uporz\u0105dkowane w gotowych bukietach Enigma2."),
             ("Bukiety FAST", lambda: self.show_coming_soon("Bukiety FAST"), "icon_fast.png", "Gotowe bukiety kana\u0142\u00f3w FAST - funkcja zostanie udost\u0119pniona wkr\u00f3tce."),
             ("MyRadioOnline", self.start_myradioonline_bouquet, "icon_myradioonline.png", "Tworzy bukiet polskich i zagranicznych stacji radiowych MyRadioOnline."),
             ("Polskie Radio", self.start_polskieradio_bouquet, "icon_polskieradio.png", "Tworzy bukiet stacji Polskiego Radia wraz z kana\u0142ami tematycznymi i regionalnymi."),
             ("RMF ON", self.start_rmfon_bouquet, "icon_rmfon.png", "Tworzy bukiet stacji radiowych dost\u0119pnych w serwisie RMF ON."),
             ("Eurozet", self.start_eurozet_bouquet, "icon_eurozet.png", "Tworzy bukiet stacji grupy Eurozet, m.in. Radio ZET, Antyradio i Meloradio."),
-
-
+            
+            
             ("Dodatki do E2K", self.open_e2k_addons_manager, "icon_e2k.png", "Miejsce na dodatki i rozszerzenia dla E2Kodi - wkr\u00f3tce."),
             ("Polskie \u017ar\u00f3d\u0142a EPG", lambda: self.show_coming_soon("Polskie zrodla EPG"), "icon_epg.png", "Polskie \u017ar\u00f3d\u0142a programu TV dla EPG Import - funkcja zostanie udost\u0119pniona wkr\u00f3tce."),
             ("IPTV.ORG", self.start_iptv_org_install, "icon_iptvorg.png", "Tworzy aktualny bukiet polskich kana\u0142\u00f3w z publicznej listy IPTV.ORG."),
@@ -468,19 +463,11 @@ class AzmanPanelMainScreen(Screen):
             ("Airly", self.start_airly_install, "icon_airly.png", "Monitoring jako\u015bci powietrza w Polsce i na \u015bwiecie."),
             ("Aktualizacja satellites.xml", self.start_satellites_xml_update, "icon_satellitesxml.png", "Pobiera aktualny satellites.xml z OE-Alliance lub OpenPLi i tworzy kopię pliku przed zapisem."),
         ]
-
+        
         menu_definitions = [
             (text, (lambda name=text: self.show_coming_soon(name)) if text in self.COMING_SOON_NAMES else func, icon, description)
             for text, func, icon, description in menu_definitions
         ]
-
-        num_items = len(menu_definitions)
-        items_to_add = (self.GRID_COLS - (num_items % self.GRID_COLS)) % self.GRID_COLS
-
-        for _ in range(items_to_add):
-            menu_definitions.append(
-                ("Wkrótce...", self.show_work_in_progress, "icon_placeholder.png", "Nowe funkcje pojawią się wkrótce.")
-            )
 
         self.all_menu_items = [{"text": t, "func": f, "pixmap": self._load_icon(i), "desc": d} for t, f, i, d in menu_definitions]
         self.apply_tab_filter()
@@ -496,14 +483,13 @@ class AzmanPanelMainScreen(Screen):
         if error_message:
             self.update_status = "Nie udało się sprawdzić aktualizacji."
             utils.log_event("Pominięto sprawdzenie aktualizacji", error=error_message)
-            if self.tabs[self.current_tab_index] == "Info":
-                self.show_info_subtab()
+            if self.tabs[self.current_tab_index] in ("Aktualizacje", "Informacje"):
+                self.show_text_tab()
             return
         has_updates = bool(self.available_panel_version or self.available_package_updates)
         self.update_status = "Dostępne aktualizacje." if has_updates else "Wszystkie zainstalowane elementy Azman są aktualne."
         if has_updates:
-            self.current_tab_index = self.tabs.index("Info")
-            self.info_subtab_index = 1
+            self.current_tab_index = self.tabs.index("Aktualizacje")
             self.apply_tab_filter()
             self.draw_page()
             self.session.open(
@@ -513,8 +499,8 @@ class AzmanPanelMainScreen(Screen):
                 timeout=3,
             )
             return
-        if self.tabs[self.current_tab_index] == "Info":
-            self.show_info_subtab()
+        if self.tabs[self.current_tab_index] in ("Aktualizacje", "Informacje"):
+            self.show_text_tab()
         else:
             self.update_selection()
 
@@ -534,9 +520,11 @@ class AzmanPanelMainScreen(Screen):
             return "Pluginy"
         if text == "M3UIPTV":
             return "Narzędzia/Inne wtyczki"
-        return "Info"
+        return self.tabs[3]
 
     def apply_tab_filter(self):
+        self["updates_actions"].hide()
+        self["updates_status"].hide()
         selected_tab = self.tabs[self.current_tab_index]
         self.menu_items = [item for item in self.all_menu_items if self.get_item_category(item) == selected_tab]
         if selected_tab == "Pluginy":
@@ -558,18 +546,12 @@ class AzmanPanelMainScreen(Screen):
             order = ("AjPanel", "M3UIPTV", "Dodatki do E2K", "Archiv CZSK", "Airly", "Aktualizacja satellites.xml")
             order_map = {name: index for index, name in enumerate(order)}
             self.menu_items.sort(key=lambda item: order_map.get(item["text"], len(order_map)))
-        if selected_tab == "Info":
+        if selected_tab in ("Aktualizacje", "Informacje"):
             self.menu_items = []
-            self.show_info_subtab()
+            self.show_text_tab()
         else:
             self["info_content"].setText("")
             self["info_content"].hide()
-            self["info_tab_0"].hide()
-            self["info_tab_1"].hide()
-            self["info_separator_v"].hide()
-            self["info_separator_h"].hide()
-            self["info_nav_left"].hide()
-            self["info_nav_right"].hide()
             self["key_green"].setText("Instaluj")
             self["key_yellow"].setText("Poprzednia zakładka")
             self["key_blue"].setText("Następna zakładka")
@@ -581,47 +563,33 @@ class AzmanPanelMainScreen(Screen):
             self["tab_%d" % index].instance.setForegroundColor(gRGB(0x39c0e0 if index == self.current_tab_index else 0xffffff))
 
     def next_tab(self):
-        if self.tabs[self.current_tab_index] == "Info" and self.info_subtab_index == 1:
-            self.start_plugins_batch_update()
-            return
         self.current_tab_index = (self.current_tab_index + 1) % len(self.tabs)
         self.apply_tab_filter()
         self.draw_page()
 
     def previous_tab(self):
-        if self.tabs[self.current_tab_index] == "Info" and self.info_subtab_index == 1:
-            self.start_panel_update_from_button()
-            return
         self.current_tab_index = (self.current_tab_index - 1) % len(self.tabs)
         self.apply_tab_filter()
         self.draw_page()
 
     def navigate_left(self):
-        if self.tabs[self.current_tab_index] == "Info":
-            self.info_subtab_index = (self.info_subtab_index - 1) % 2
-            self.show_info_subtab()
+        if self.tabs[self.current_tab_index] in ("Aktualizacje", "Informacje"):
+            self.current_tab_index = (self.current_tab_index - 1) % len(self.tabs)
+            self.apply_tab_filter()
+            self.draw_page()
             return
         self.move(0, -1)
 
     def navigate_right(self):
-        if self.tabs[self.current_tab_index] == "Info":
-            self.info_subtab_index = (self.info_subtab_index + 1) % 2
-            self.show_info_subtab()
+        if self.tabs[self.current_tab_index] in ("Aktualizacje", "Informacje"):
+            self.current_tab_index = (self.current_tab_index + 1) % len(self.tabs)
+            self.apply_tab_filter()
+            self.draw_page()
             return
         self.move(0, 1)
 
-    def show_info_subtab(self):
-        is_updates = self.info_subtab_index == 1
-        self["info_tab_0"].setText("[Informacje]" if not is_updates else "Informacje")
-        self["info_tab_1"].setText("[Aktualizacje]" if is_updates else "Aktualizacje")
-        self["info_tab_0"].instance.setForegroundColor(gRGB(0x39c0e0 if not is_updates else 0xffffff))
-        self["info_tab_1"].instance.setForegroundColor(gRGB(0x39c0e0 if is_updates else 0xffffff))
-        self["info_tab_0"].show()
-        self["info_tab_1"].show()
-        self["info_separator_v"].show()
-        self["info_separator_h"].show()
-        self["info_nav_left"].show()
-        self["info_nav_right"].show()
+    def show_text_tab(self):
+        is_updates = self.tabs[self.current_tab_index] == "Aktualizacje"
         if not is_updates:
             python_version = runtime.get_runtime_info()["python"]
             self["info_content"].setText(
@@ -637,34 +605,61 @@ class AzmanPanelMainScreen(Screen):
             self["key_yellow"].setText("Poprzednia zakładka")
             self["key_blue"].setText("Następna zakładka")
         else:
-            self["key_green"].setText("Sprawdź aktualizacje")
-            self["key_yellow"].setText("Aktualizacja Panelu")
-            self["key_blue"].setText("Aktualizacja Pluginów")
-            if self.update_check_error:
-                self["info_content"].setText("Sprawdzenie aktualizacji Azman\n\nNie udało się pobrać informacji o aktualizacjach.\n%s" % self.update_check_error)
-            else:
-                lines = ["Sprawdzenie aktualizacji Azman", ""]
-                if self.update_worker:
-                    lines.append("Trwa sprawdzanie wersji…")
-                else:
-                    lines.append("Azman Panel: %s" % ("dostępna wersja %s" % self.available_panel_version if self.available_panel_version else "aktualny"))
-                    if self.available_package_updates:
-                        lines.extend(["", "Aktualizacje pluginów:"])
-                        lines.extend("• %s: %s → %s" % (name, local, remote) for _pkg_id, name, local, remote in self.available_package_updates)
-                    else:
-                        lines.extend(["", "Pluginy Azman: aktualne"])
-                    lines.extend([
-                        "",
-                        "ZIELONY — sprawdź ponownie dostępność aktualizacji.",
-                        "ŻÓŁTY — zainstaluj aktualizację Azman Panel." if self.available_panel_version else "ŻÓŁTY — Azman Panel jest aktualny.",
-                        "NIEBIESKI — zainstaluj wszystkie aktualizacje pluginów." if self.available_package_updates else "NIEBIESKI — pluginy Azman są aktualne.",
-                    ])
-                self["info_content"].setText("\n".join(lines))
+            self.show_updates_tab()
+            return
         self["info_content"].show()
 
+    def show_updates_tab(self):
+        actions = self["updates_actions"]
+        index = actions.getSelectedIndex()
+        unavailable = "Sprawdzanie..." if self.update_worker else ("Brak danych" if self.update_check_error else "Aktualne")
+        panel_status = ("%s -> %s" % (constants.PLUGIN_VERSION, self.available_panel_version)
+                        if self.available_panel_version else unavailable)
+        plugins_status = ("Dost\u0119pne: %d" % len(self.available_package_updates)
+                          if self.available_package_updates else unavailable)
+        actions.setList([
+            "Sprawd\u017a aktualizacje" + (" - trwa sprawdzanie" if self.update_worker else ""),
+            "Aktualizuj Azman Panel - " + panel_status,
+            "Aktualizuj pluginy - " + plugins_status,
+        ])
+        actions.moveToIndex(max(0, min(index, 2)))
+        actions.show()
+        self["info_content"].hide()
+        self["key_green"].setText("Wykonaj")
+        self["key_yellow"].setText("Poprzednia zak\u0142adka")
+        self["key_blue"].setText("Nast\u0119pna zak\u0142adka")
+        lines = ["G\u00f3ra/d\u00f3\u0142 - wybierz, OK lub zielony - wykonaj.", ""]
+        if self.current_worker:
+            lines.append("Trwa wykonywanie operacji. Prosz\u0119 czeka\u0107.")
+        elif self.update_worker:
+            lines.append("Trwa sprawdzanie dost\u0119pno\u015bci aktualizacji...")
+        elif self.update_check_error:
+            lines.extend(["Nie uda\u0142o si\u0119 sprawdzi\u0107 aktualizacji:", self.update_check_error])
+        else:
+            lines.append("Zainstalowany Azman Panel: %s" % constants.PLUGIN_VERSION)
+            if self.available_package_updates:
+                lines.extend(["", "Aktualizacje plugin\u00f3w:"])
+                lines.extend("%s: %s -> %s" % (name, local, remote)
+                             for _pkg_id, name, local, remote in self.available_package_updates)
+            elif not self.available_panel_version:
+                lines.append("Wszystkie zainstalowane elementy Azman s\u0105 aktualne.")
+        self["updates_status"].setText("\n".join(lines))
+        self["updates_status"].show()
+
+    def run_update_action(self):
+        if self.current_worker or self.update_worker:
+            return
+        index = self["updates_actions"].getSelectedIndex()
+        if index == 0:
+            self.start_manual_update_check()
+        elif index == 1 and self.available_panel_version and not self.update_check_error:
+            self.start_panel_update_from_button()
+        elif index == 2 and self.available_package_updates and not self.update_check_error:
+            self.start_plugins_batch_update()
+
     def draw_page(self):
-
-
+        
+        
         for r in range(3):
             for c in range(self.GRID_WIDGET_COLS):
                 item_index = r * self.GRID_COLS + c
@@ -705,10 +700,11 @@ class AzmanPanelMainScreen(Screen):
             self["plugin_info_desc"].setText("")
 
     def install_selected(self):
-        if self.tabs[self.current_tab_index] == "Info":
-            if self.info_subtab_index == 1:
-                self.start_manual_update_check()
-                return
+        selected_tab = self.tabs[self.current_tab_index]
+        if selected_tab == "Aktualizacje":
+            self.run_update_action()
+            return
+        if selected_tab == "Informacje":
             self.toggle_main_menu_visibility()
             return
         item_index = self.selected_pos[0] * self.GRID_COLS + self.selected_pos[1]
@@ -721,8 +717,8 @@ class AzmanPanelMainScreen(Screen):
         if self.get_item_category(item) != "Pluginy":
             self.session.open(MessageBox, "Przycisk Instaluj dotyczy pluginów z zakładki Pluginy.", type=MessageBox.TYPE_INFO)
             return
-
-
+        
+        
         if item["text"] == "Monitor Burz":
             self.start_monitoringburz_install()
             return
@@ -760,7 +756,7 @@ class AzmanPanelMainScreen(Screen):
             return
         self.update_check_error = ""
         self.update_worker = ManifestUpdateCheckWorker(self._on_manual_update_check_finished)
-        self.show_info_subtab()
+        self.show_text_tab()
         self.update_worker.start()
 
     def _on_manual_update_check_finished(self, error_message, panel_version, package_updates):
@@ -768,8 +764,8 @@ class AzmanPanelMainScreen(Screen):
         self.available_panel_version = panel_version or ""
         self.available_package_updates = package_updates or []
         self.update_check_error = error_message or ""
-        if self.tabs[self.current_tab_index] == "Info":
-            self.show_info_subtab()
+        if self.tabs[self.current_tab_index] in ("Aktualizacje", "Informacje"):
+            self.show_text_tab()
 
     def start_panel_update_from_button(self):
         if self.current_worker:
@@ -876,6 +872,12 @@ class AzmanPanelMainScreen(Screen):
         )
 
     def move(self, d_row, d_col):
+        if self.tabs[self.current_tab_index] == "Aktualizacje":
+            if d_row < 0:
+                self["updates_actions"].up()
+            elif d_row > 0:
+                self["updates_actions"].down()
+            return
         if not self.menu_items:
             return
         current_index = self.selected_pos[0] * self.GRID_COLS + self.selected_pos[1]
@@ -888,6 +890,9 @@ class AzmanPanelMainScreen(Screen):
         self.update_selection()
 
     def run_selected_item(self):
+        if self.tabs[self.current_tab_index] == "Aktualizacje":
+            self.run_update_action()
+            return
         item_index = self.selected_pos[0] * self.GRID_COLS + self.selected_pos[1]
         if item_index < len(self.menu_items):
             try:
@@ -923,14 +928,14 @@ class AzmanPanelMainScreen(Screen):
             self.on_picon_path_selected(saved_path)
         else:
             self.session.openWithCallback(self.on_picon_path_selected, PiconPathSelectionScreen)
-
+            
     def on_picon_path_selected(self, target_dir):
         if not target_dir: return
         config.plugins.AzmanPanel.picon_path.value = target_dir
         save_config()
         self.picon_target_dir = target_dir
         self._open_picon_selection_screen()
-
+        
     def _open_picon_selection_screen(self, *args):
         self.download_messagebox = self.session.open(
             MessageBox, "Pobieranie listy paczek picon…", type=MessageBox.TYPE_INFO
@@ -954,9 +959,9 @@ class AzmanPanelMainScreen(Screen):
                 item_list,
                 "Lokalizacja instalacji: %s" % self.picon_target_dir,
                 self.on_picons_selected,
-                icon_name="icon_picon_package.png",
+                icon_name="icon_picons.png",
             )
-
+        
         self.open_timer.stop()
         self.open_timer.callback.clear()
         self.open_timer.callback.append(open_select_list_screen)
@@ -997,7 +1002,7 @@ class AzmanPanelMainScreen(Screen):
         self.current_worker = PiconInstallationWorker(selected_zips=selected_zips, target_dir=self.picon_target_dir, callback_progress=self.progress_screen.setProgress, callback_finished=self.on_picon_installation_finished)
         self.progress_screen.parent_worker = self.current_worker
         self.current_worker.start()
-
+        
     def on_picon_installation_finished(self, final_message):
         self.current_worker = None
         def after_messagebox_callback(result):
@@ -1157,15 +1162,15 @@ class AzmanPanelMainScreen(Screen):
                 "Bukiety zostaną zapisane w /etc/enigma2 i dodane do bouquets.tv.",
                 self.on_iptv_bouquets_selected_for_install,
                 title="Wybierz bukiety IPTV PL",
-                icon_name="icon_bouquet_package.png",
+                icon_name="icon_iptv_pl.png",
                 on_uninstall_callback=self.on_iptv_bouquets_selected_for_uninstall,
             )
-
+        
         self.open_timer.stop()
         self.open_timer.callback.clear()
         self.open_timer.callback.append(open_select_list_screen)
         self.open_timer.start(1, True)
-
+    
     def on_iptv_bouquets_selected_for_install(self, selected_bouquets):
         if not selected_bouquets: return
         self._defer_action(lambda: self._start_wrapper_detection(selected_bouquets))
@@ -1267,14 +1272,14 @@ class AzmanPanelMainScreen(Screen):
             for line in installed.splitlines()
         )
 
+        
+        
+        
+        
 
-
-
-
-
-
-
-
+        
+        
+        
     def start_monitoringburz_install(self):
         if self._runtime_package_is_installed("enigma2-plugin-extensions--azman-monitoringburz"):
             self.session.openWithCallback(
@@ -1629,11 +1634,11 @@ class AzmanPanelMainScreen(Screen):
         if not confirmed:
             self.session.open(MessageBox, "Operacja anulowana.", type=MessageBox.TYPE_INFO)
             return
-
+        
         self.current_worker = IptvOrgWorker(callback_finished=self._on_iptv_org_finished)
         self.current_worker.start()
         self.session.open(MessageBox, "Rozpoczęto tworzenie bukietu IPTV.ORG...\nProszę czekać.", type=MessageBox.TYPE_INFO, timeout=3)
-
+        
     def _on_iptv_org_finished(self, error_message, final_message):
         self.current_worker = None
         message = final_message or error_message
@@ -1657,7 +1662,7 @@ class AzmanPanelMainScreen(Screen):
             lambda c: c and self._defer_action(lambda: self._handle_install_with_restart("Instalowanie AJPanel", constants.AJPANEL_INSTALL_CMD)),
             MessageBox, message, MessageBox.TYPE_YESNO, default=False
         )
-
+        
     def start_m3uiptv_install(self):
         message = ("Czy na pewno chcesz pobrać i zainstalować plugin M3U to Bouquet Converter?\n\n"
                    "Zostanie wykonana zewnętrzna komenda, która pobierze i zainstaluje plugin z GitHub.")

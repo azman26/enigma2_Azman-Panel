@@ -14,4 +14,5 @@ config.plugins.AzmanPanel.main_menu_visible = ConfigYesNo(default=True)
 
 def save_config():
     """Funkcja pomocnicza do zapisu konfiguracji"""
+    config.plugins.AzmanPanel.save()
     configfile.save()
