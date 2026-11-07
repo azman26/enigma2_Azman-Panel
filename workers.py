@@ -18,6 +18,7 @@ from enigma import eDVBDB
 from . import constants, utils, runtime
 from .mainthread import call_in_main_thread
 from .epg_mapper import PanelEpgMapper
+from .bouquet_epg import assign_bouquet_epg
 from .epg_events import import_events_async as import_epg_events_async
 
 
@@ -442,6 +443,11 @@ class PrivateBouquetInstallWorker(ProgressWorkerMixin, BaseWorker):
                     utils.atomic_write_lines(target_path, [content])
                 else:
                     urllib.request.urlretrieve(download_url, target_path, reporthook=self._internal_reporthook)
+                try:
+                    assign_bouquet_epg(target_path)
+                except Exception as error:
+                    utils.log_error(error, "PrivateBouquetInstallWorker EPG", bouquet=filename)
+                import_epg_events_async(logger=lambda message: utils.log_event("EPG events: %s" % message), pattern=target_path)
                 if source_filename != filename:
                     utils.remove_bouquet_and_registration(target_dir, source_filename)
 

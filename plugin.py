@@ -76,11 +76,11 @@ def Plugins(**kwargs):
             fnc=autostart,
         ),
     ]
-    # Keep the callback registered: menu() checks the current saved setting.
-    descriptors.append(PluginDescriptor(
-        name=constants.PLUGIN_NAME,
-        description="Centrum narzedzi i instalacji Azman",
-        where=PluginDescriptor.WHERE_MENU,
-        fnc=menu,
-    ))
+    if config.plugins.AzmanPanel.main_menu_visible.value:
+        descriptors.append(PluginDescriptor(
+            name=constants.PLUGIN_NAME,
+            description="Centrum narzedzi i instalacji Azman",
+            where=PluginDescriptor.WHERE_MENU,
+            fnc=menu,
+        ))
     return descriptors

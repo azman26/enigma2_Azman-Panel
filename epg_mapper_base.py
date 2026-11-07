@@ -103,6 +103,7 @@ class FreeTvEpgMapper(object):
         config = self._config()
         payload = json.dumps({
             "box_id": str(config.get("box_id") or "").strip(),
+            "provider": self.provider_id,
             "channels": names,
         }).encode("utf-8")
         headers = {
