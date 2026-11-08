@@ -10,7 +10,7 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 
-KEEP = 3
+KEEP = 2
 MAX_FILE = 8 * 1024 * 1024
 MAX_TOTAL = 24 * 1024 * 1024
 MAX_ARCHIVE = 34 * 1024 * 1024

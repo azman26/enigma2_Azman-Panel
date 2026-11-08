@@ -5,7 +5,7 @@
 
 
 PLUGIN_NAME = "Azman Panel"
-PLUGIN_VERSION = "2026.11.07-1916"
+PLUGIN_VERSION = "2026.11.08-1426"
 
 
 AZMAN_MANIFEST_URL = "https://raw.githubusercontent.com/azman26/enigma2_Azman-Panel/main/feed/manifest.json"
