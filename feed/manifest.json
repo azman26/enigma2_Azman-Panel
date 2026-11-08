@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "repository": "Azman Feed",
-  "updated": "2026-11-08T13:33:40Z",
+  "updated": "2026-11-08T17:29:53Z",
   "packages": [
     {
       "id": "azman-panel",
@@ -234,9 +234,9 @@
     {
       "id": "freetvplayer",
       "name": "FreeTV Player",
-      "version": "2026.11.08-1417",
+      "version": "2026.11.08-1820",
       "category": "Pluginy",
-      "description": "Odtwarzacz bezpłatnych kanałów internetowych i generator bukietów Enigma2 dla dostępnych providerów.",
+      "description": "Poprawiono odtwarzanie materiałów ARTE i polskich napisów oraz skrócono czas uruchamiania. Bukiet ARTE jest teraz uporządkowany od najnowszych materiałów.",
       "python": [
         "3.9",
         "3.12",
@@ -249,20 +249,20 @@
       "package": "enigma2-plugin-extensions--azman-freetvplayer",
       "variants": {
         "py39": {
-          "ipk": "py39/enigma2-plugin-extensions--azman-freetvplayer-py39_2026.11.08-1417_all.ipk",
-          "sha256": "fd61f9b372e05f16d40873c9e4c3da62c4728cb06f71d1709ba337d5e54138e1"
+          "ipk": "py39/enigma2-plugin-extensions--azman-freetvplayer-py39_2026.11.08-1820_all.ipk",
+          "sha256": "d310f4cf2caea60fa4e69ea190352cc79d33f09c18bff462691f013672790769"
         },
         "py312": {
-          "ipk": "py312/enigma2-plugin-extensions--azman-freetvplayer-py312_2026.11.08-1417_all.ipk",
-          "sha256": "416ebd9e67de6bf9361b7591cb642076793d790ca5086ee883481db924b44cae"
+          "ipk": "py312/enigma2-plugin-extensions--azman-freetvplayer-py312_2026.11.08-1820_all.ipk",
+          "sha256": "21968b0412b2877688379664c8a07a3fa514cd11c3e8575e6808d922aaeea884"
         },
         "py313": {
-          "ipk": "py313/enigma2-plugin-extensions--azman-freetvplayer-py313_2026.11.08-1417_all.ipk",
-          "sha256": "11793ac044cf8429b64176f353eb2c7d69241f8a2b029766f2083cfa06ffe105"
+          "ipk": "py313/enigma2-plugin-extensions--azman-freetvplayer-py313_2026.11.08-1820_all.ipk",
+          "sha256": "af89a942c31fd82f1270579791e32027ae0769b7e1c9121ea9ec17e5c506123b"
         },
         "py314": {
-          "ipk": "py314/enigma2-plugin-extensions--azman-freetvplayer-py314_2026.11.08-1417_all.ipk",
-          "sha256": "64f00e40590e4039560fd98e3b98cdf1462f078e2ec1a6d6485e926b8dcb83c0"
+          "ipk": "py314/enigma2-plugin-extensions--azman-freetvplayer-py314_2026.11.08-1820_all.ipk",
+          "sha256": "406299888471bda79a3578e6cfa593b64d5ea96425b048dbd5d4700628387be2"
         }
       },
       "protected": true
