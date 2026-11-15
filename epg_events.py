@@ -11,7 +11,7 @@ import time
 
 from . import epg_access
 from .mainthread import call_in_main_thread
-from .epg_jobs import ImportQueue
+from .epg_jobs import ImportQueue, shared_import_queue
 from .epg_validation import read_json, valid_reference
 from .epg_profile import EPG_EXCLUDED_PROVIDERS
 from .epg_reports import merge_report, read_state
@@ -65,20 +65,22 @@ def _empty_reference(reference_fields):
         return True
 
 
-def scan_bouquet_channels(pattern=None):
+def scan_bouquet_channels(pattern=None, prefix=None, excluded=None):
     """Zwraca liste (name, dvb_reference) wyciagnieta z wpisow #SERVICE 4097:...
     juz zapisanych w bukietach - dvb_reference to pelna 10-polowa referencja
     "1:flags:stype:sid:tsid:onid:namespace:parent_sid:parent_tsid" gotowa dla
     eEPGCache.importEvents()."""
+    prefix = BOUQUET_PREFIX if prefix is None else prefix
+    excluded = EPG_EXCLUDED_PROVIDERS if excluded is None else excluded
     pattern = pattern or BOUQUET_GLOB
     seen = {}
     for path in sorted(glob.glob(pattern)):
         filename = os.path.basename(path)
-        if not filename.startswith(BOUQUET_PREFIX) or not filename.endswith((".tv", ".radio")):
+        if not filename.startswith(prefix) or not filename.endswith((".tv", ".radio")):
             continue
         if os.path.basename(path) in (
-            BOUQUET_PREFIX + "%s.tv" % provider_id
-            for provider_id in EPG_EXCLUDED_PROVIDERS
+            prefix + "%s.tv" % provider_id
+            for provider_id in excluded
         ):
             continue
         try:
@@ -180,12 +182,12 @@ def _to_event_tuples(raw_events):
     return tuples
 
 
-def import_events(logger=None, epgcache=None, pattern=None):
+def import_events(logger=None, epgcache=None, pattern=None, scope_channels=None, report_targets=None):
     """Glowny wpis: skanuje wlasne bukiety, pobiera eventy z prywatnego API
     i wstrzykuje je przez eEPGCache.importEvents(). Zwraca (channels, events).
 
     pattern: None = pelny skan wszystkich bukietow AzmanFreeTvPlayer (tak
-    dziala okresowy timer co 12h i import przy starcie Enigmy2 - zapewnia,
+    dziala harmonogram publikacji EPGD i import przy starcie Enigmy2 - zapewnia,
     ze wszystko zostaje odswiezone nawet jesli akurat zaden bukiet nie byl
     ostatnio generowany). Konkretna sciezka pliku = tylko kanaly z JEDNEGO,
     wlasnie zapisanego bukietu - szybszy, tanszy w zapytaniach import od razu
@@ -196,15 +198,16 @@ def import_events(logger=None, epgcache=None, pattern=None):
         logger("EPG events: disabled - private API access not configured")
         return 0, 0
 
-    scope_channels = {}
-    for path in sorted(glob.glob(pattern or BOUQUET_GLOB)):
-        rows = scan_bouquet_channels(path)
-        filename = os.path.basename(path)
-        if filename.startswith(BOUQUET_PREFIX) and filename.endswith(('.tv', '.radio')):
-            scope = filename[len(BOUQUET_PREFIX):].rsplit('.', 1)[0]
-            group = scope_channels.setdefault(scope, {})
-            for name, reference in rows:
-                group.setdefault(reference, []).append(name)
+    if scope_channels is None:
+        scope_channels = {}
+        for path in sorted(glob.glob(pattern or BOUQUET_GLOB)):
+            rows = scan_bouquet_channels(path)
+            filename = os.path.basename(path)
+            if filename.startswith(BOUQUET_PREFIX) and filename.endswith(('.tv', '.radio')):
+                scope = filename[len(BOUQUET_PREFIX):].rsplit('.', 1)[0]
+                group = scope_channels.setdefault(scope, {})
+                for name, reference in rows:
+                    group.setdefault(reference, []).append(name)
     channels = [(name, reference) for group in scope_channels.values()
                 for reference, names in group.items() for name in names]
     if not channels:
@@ -212,7 +215,7 @@ def import_events(logger=None, epgcache=None, pattern=None):
             # No native EPG calls are needed for an empty scope. Still clear
             # reports/status for removed channels and deleted bouquets.
             _apply_events([], {}, object(), logger, scope_channels=scope_channels,
-                          full_scan=pattern is None, source_status={})
+                          full_scan=pattern is None, source_status={}, report_targets=report_targets)
         logger("EPG events: no %s bouquet channels found" % PLUGIN_LABEL)
         return 0, 0
 
@@ -253,7 +256,7 @@ def import_events(logger=None, epgcache=None, pattern=None):
     source_status = dict(_SOURCE_STATUS)
     def apply_events():
         return _apply_events(pending, names_by_reference, epgcache, logger, failed_references,
-                             scope_channels, pattern is None, source_status)
+                             scope_channels, pattern is None, source_status, report_targets)
 
     if epgcache is not None:
         return apply_events()
@@ -262,7 +265,7 @@ def import_events(logger=None, epgcache=None, pattern=None):
 
 
 def _apply_events(pending, names_by_reference, epgcache, logger, failed_references=None,
-                  scope_channels=None, full_scan=False, source_status=None):
+                  scope_channels=None, full_scan=False, source_status=None, report_targets=None):
     failed_references = failed_references or set()
     if epgcache is None:
         try:
@@ -285,6 +288,31 @@ def _apply_events(pending, names_by_reference, epgcache, logger, failed_referenc
             apply_failed.add(reference)
             logger("EPG events: importEvents failed reference=%s error=%s" % (reference, error))
 
+    targets = report_targets or [(MISSING_EVENTS_REPORT_FILE, scope_channels)]
+    for report_file, target_scopes in targets:
+        target_scopes = target_scopes if target_scopes is not None else {'__legacy__': names_by_reference}
+        target_names = {}
+        for group in target_scopes.values():
+            for reference, names in group.items():
+                target_names.setdefault(reference, []).extend(names)
+        target_pending = [(ref, events) for ref, events in pending if ref in target_names]
+        target_logger = logger
+        if report_targets is not None:
+            def target_logger(message, target=report_file):
+                logger('%s: %s' % (os.path.basename(target).replace('_missing_events.json', ''), message))
+        _save_event_reports(target_names, target_scopes, imported_references,
+                            failed_references & set(target_names), apply_failed & set(target_names),
+                            target_pending, target_logger, full_scan, source_status, report_file)
+    if report_targets is not None:
+        logger('Shared EPG: imported %d events across %d unique references' % (total_events, matched_channels))
+    return matched_channels, total_events
+
+
+def _save_event_reports(names_by_reference, scope_channels, imported_references,
+                        failed_references, apply_failed, pending, logger,
+                        full_scan, source_status, report_file):
+    matched_channels = len(imported_references & set(names_by_reference))
+    total_events = sum(len(events) for ref, events in pending if ref in imported_references)
     missing_names = sorted(
         name for reference, names in names_by_reference.items() if reference not in imported_references
         and reference not in failed_references and reference not in apply_failed
@@ -296,7 +324,7 @@ def _apply_events(pending, names_by_reference, epgcache, logger, failed_referenc
         for scope, group in scope_channels.items():
             updates[scope] = {reference: (None if reference in failed_references or reference in apply_failed
                 else [] if reference in imported_references else names) for reference, names in group.items()}
-        merge_report(MISSING_EVENTS_REPORT_FILE, updates, 'events',
+        merge_report(report_file, updates, 'events',
                      active_scopes=set(scope_channels) if full_scan else None)
     except Exception as error:
         logger('EPG events: report not saved error=%s' % type(error).__name__)
@@ -305,12 +333,12 @@ def _apply_events(pending, names_by_reference, epgcache, logger, failed_referenc
         if len(missing_names) > 10:
             preview += ", ..."
         logger("EPG events: no data for %d channel(s): %s (pelna lista: %s)" % (
-            len(missing_names), preview, MISSING_EVENTS_REPORT_FILE))
+            len(missing_names), preview, report_file))
 
     if failed_references:
         logger("EPG events: transport failed for %d references; not classified as missing EPG" % len(failed_references))
     try:
-        status_path = MISSING_EVENTS_REPORT_FILE.replace("missing_events", "status")
+        status_path = report_file.replace("missing_events", "status")
         status = {"attempted_at": int(time.time()), "imported_channels": matched_channels,
                   "imported_events": total_events, "failed_references": len(failed_references),
                   "failed_imports": len(apply_failed),
@@ -357,3 +385,51 @@ _IMPORT_QUEUE = ImportQueue()
 
 def import_events_async(logger=None, pattern=None):
     return _IMPORT_QUEUE.submit(import_events, logger=logger, pattern=pattern)
+
+
+def import_scheduled_events_async(logger=None, full=True):
+    """Full EPGD twice daily; the other publications contain only LG/TCL/Xiaomi."""
+    if full:
+        return import_events_async(logger=logger)
+    result = None
+    for provider in ('lgchannels', 'tclstream', 'xiaomi'):
+        result = import_events_async(logger=logger, pattern=(
+            '/etc/enigma2/' + BOUQUET_PREFIX + '*' + provider + '*'))
+    return result
+
+
+def _import_shared_events(profiles, full, logger=None, epgcache=None):
+    """Read each profile's bouquets, then fetch/import each DVB identity once."""
+    scopes = {}
+    targets = []
+    for prefix, report_prefix, excluded in profiles:
+        if not full and prefix != 'userbouquet.azmanfreetvplayer_':
+            continue
+        groups = {}
+        patterns = [prefix + '*'] if full else [prefix + '*' + provider + '*' for provider in ('lgchannels', 'tclstream', 'xiaomi')]
+        paths = sorted({path for pattern in patterns
+                        for path in glob.glob('/etc/enigma2/' + pattern)})
+        for path in paths:
+            filename = os.path.basename(path)
+            if not filename.startswith(prefix) or not filename.endswith(('.tv', '.radio')):
+                continue
+            scope = filename[len(prefix):].rsplit('.', 1)[0]
+            group = groups.setdefault(scope, {})
+            for name, reference in scan_bouquet_channels(path, prefix=prefix, excluded=excluded):
+                group.setdefault(reference, []).append(name)
+            scopes[prefix + scope] = group
+        targets.append((report_prefix + '_missing_events.json', groups))
+    if not targets:
+        return 0, 0
+    return import_events(logger=logger, epgcache=epgcache,
+                         pattern=None if full else '__shared_lg_tcl__',
+                         scope_channels=scopes, report_targets=targets)
+
+
+def import_shared_events_async(profiles, full=True, logger=None):
+    # One shared queue, as well as one shared timer. Profile-scoped manual
+    # imports remain serialized with scheduled imports by the global lock.
+    def run(logger=None, pattern=None):
+        return _import_shared_events(profiles, full, logger=logger)
+    return shared_import_queue.submit(run, logger=logger,
+                                      pattern=None if full else '__lg_tcl__')

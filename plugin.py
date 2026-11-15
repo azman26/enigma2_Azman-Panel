@@ -6,6 +6,7 @@ from .screens import AzmanPanelMainScreen
 from . import constants, utils
 from .config import config
 from .epg_events import import_events_async as import_epg_events_async
+from .epg_coordinator import start as start_shared_epg, stop as stop_shared_epg
 
 
 def main(session, **kwargs):
@@ -18,44 +19,21 @@ def menu(menuid, **kwargs):
     return []
 
 
-_EPG_EVENTS_TIMER = None
-EPG_EVENTS_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000
-
-
 def _run_epg_events_import():
     import_epg_events_async(logger=lambda message: utils.log_event("EPG events: %s" % message))
 
 
-def _on_epg_events_timer():
-    _run_epg_events_import()
-    if _EPG_EVENTS_TIMER is not None:
-        _EPG_EVENTS_TIMER.start(EPG_EVENTS_REFRESH_INTERVAL_MS, True)
-
-
 def start_epg_events_timer():
-    global _EPG_EVENTS_TIMER
-    if _EPG_EVENTS_TIMER is not None:
-        return
-    _EPG_EVENTS_TIMER = eTimer()
-    _EPG_EVENTS_TIMER.callback.append(_on_epg_events_timer)
-    _EPG_EVENTS_TIMER.start(EPG_EVENTS_REFRESH_INTERVAL_MS, True)
-    utils.log_event("EPG events timer armed (every 12h)")
+    start_shared_epg(utils.log_event)
 
 
 def stop_epg_events_timer():
-    global _EPG_EVENTS_TIMER
-    if _EPG_EVENTS_TIMER is not None:
-        try:
-            _EPG_EVENTS_TIMER.stop()
-        except Exception:
-            pass
-        _EPG_EVENTS_TIMER = None
+    stop_shared_epg()
 
 
 def autostart(reason, **kwargs):
     if reason == 0:
         start_epg_events_timer()
-        _run_epg_events_import()
     elif reason == 1:
         stop_epg_events_timer()
 
