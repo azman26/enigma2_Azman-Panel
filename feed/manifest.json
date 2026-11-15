@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "repository": "Azman Feed",
-  "updated": "2026-11-08T17:29:53Z",
+  "updated": "2026-11-15T11:49:04Z",
   "packages": [
     {
       "id": "azman-panel",
       "name": "Azman Panel",
-      "version": "2026.11.08-1432",
+      "version": "2026.11.15-1206",
       "category": "system",
       "description": "Panel instalacyjny i narzędziowy ekosystemu Azman.",
       "python": [
@@ -21,9 +21,9 @@
       "package": "enigma2-plugin-extensions--azman-azmanpanel",
       "variants": {
         "all": {
-          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.11.08-1432_all.ipk",
-          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.11.08-1432/enigma2-plugin-extensions--azman-azmanpanel_2026.11.08-1432_all.ipk",
-          "sha256": "6d0d0a50cee4883e811ee6af7df18c2f9b0194dab0a987a75f345cc72af1ffe7"
+          "ipk": "all/enigma2-plugin-extensions--azman-azmanpanel_2026.11.15-1206_all.ipk",
+          "url": "https://github.com/azman26/enigma2_Azman-Panel/releases/download/v2026.11.15-1206/enigma2-plugin-extensions--azman-azmanpanel_2026.11.15-1206_all.ipk",
+          "sha256": "d03e89eb1be1d460bb8ce1e6552a7af15c85f89597143251bcfd4d20d879de08"
         }
       },
       "protected": false
