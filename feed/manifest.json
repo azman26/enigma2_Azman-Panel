@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "repository": "Azman Feed",
-  "updated": "2026-11-15T11:49:36Z",
+  "updated": "2026-11-19T21:11:03Z",
   "packages": [
     {
       "id": "azman-panel",
@@ -234,9 +234,9 @@
     {
       "id": "freetvplayer",
       "name": "FreeTV Player",
-      "version": "2026.11.15-1206",
+      "version": "2026.11.19-2151",
       "category": "Pluginy",
-      "description": "Wspólne odświeżanie EPG bez powtórzeń, nowy harmonogram i częstsze aktualizacje LG, TCL oraz Xiaomi. Przywrócono pobieranie kanałów Channelbox i poprawiono ochronę identyfikatora urządzenia w logach.",
+      "description": "Usprawniono pobieranie EPG przez API AZMAN dla wygenerowanych bukietów. Wyłączono pobieranie EPG po restarcie GUI; automatyczne aktualizacje działają według harmonogramu. Pełne aktualizacje: 07:15 i 17:15; dodatkowe LG, TCL i Xiaomi: 03:15, 11:15 i 23:15 czasu polskiego, tylko dla bukietów obecnych na boxie. Usprawniono zapis dużej liczby wydarzeń i diagnostykę błędów. Usunięto zbędną pozycję zgody z menu FTVP — jego bukiety nie wymagają zgody. Usunięto powtarzanie początku opisu audycji. Dodano w menu informację o niezależnym działaniu EPG w FTVP i godzinach aktualizacji.",
       "python": [
         "3.9",
         "3.12",
@@ -249,20 +249,20 @@
       "package": "enigma2-plugin-extensions--azman-freetvplayer",
       "variants": {
         "py39": {
-          "ipk": "py39/enigma2-plugin-extensions--azman-freetvplayer-py39_2026.11.15-1206_all.ipk",
-          "sha256": "351e74d34b4ded5bb46bad036b661385446a3c229fbd340b82f0c11fd58583de"
+          "ipk": "py39/enigma2-plugin-extensions--azman-freetvplayer-py39_2026.11.19-2151_all.ipk",
+          "sha256": "d8274d82055182922701693ba334d07c8e8edbcdd68264f162f2378d1686512c"
         },
         "py312": {
-          "ipk": "py312/enigma2-plugin-extensions--azman-freetvplayer-py312_2026.11.15-1206_all.ipk",
-          "sha256": "e5aa4ddee3c1e4d78f86025a96fdd31ec4132bae06f487577de0995e1c29621c"
+          "ipk": "py312/enigma2-plugin-extensions--azman-freetvplayer-py312_2026.11.19-2151_all.ipk",
+          "sha256": "77320cb9bdfaf17117400ef3e6d962514283dab83aa4a1eb9a430e6fc1ae4aa3"
         },
         "py313": {
-          "ipk": "py313/enigma2-plugin-extensions--azman-freetvplayer-py313_2026.11.15-1206_all.ipk",
-          "sha256": "7dc74d9e30e386b0e8336259a067f3e5b7077d76fcd693a7e3aa0ba5f60a9e1a"
+          "ipk": "py313/enigma2-plugin-extensions--azman-freetvplayer-py313_2026.11.19-2151_all.ipk",
+          "sha256": "1456d26ca5016e3da35f9b8dfc43be57bad3081085a02e72a06502ba78be213c"
         },
         "py314": {
-          "ipk": "py314/enigma2-plugin-extensions--azman-freetvplayer-py314_2026.11.15-1206_all.ipk",
-          "sha256": "ff7fa9a40943eecbd7ced97629ddd1b891e4999142220e517eb116267b82fe68"
+          "ipk": "py314/enigma2-plugin-extensions--azman-freetvplayer-py314_2026.11.19-2151_all.ipk",
+          "sha256": "861f106cdf8d9b033c626667acd77baf25e6dae8fb24157e17b2aade2d0b08df"
         }
       },
       "protected": true
